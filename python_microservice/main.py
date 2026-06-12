@@ -7,7 +7,6 @@ from torchvision import transforms
 from torchvision.models.detection import ssd300_vgg16
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from sourceafis import FingerprintImage, FingerprintTemplate
 
 app = FastAPI()
 
@@ -15,7 +14,7 @@ IMAGE_SIZE = 300
 NUM_CLASSES = 2
 CONFIDENCE_THRESHOLD = 0.5
 
-# 1. Load the PyTorch Model once at server startup
+# 1. Load the PyTorch Model
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = ssd300_vgg16(weights=None, num_classes=NUM_CLASSES)
 model.load_state_dict(torch.load("best_model_val.pth", map_location=device))
@@ -54,7 +53,6 @@ def scale_bbox(bbox, original_size, model_size=300):
     ]
 
 def erase_with_ellipse(image, bbox, padding_ratio=0.05, blur_size=25):
-    """Your custom erasure logic."""
     x_min, y_min, x_max, y_max = bbox
     cx = int((x_min + x_max) / 2)
     cy = int((y_min + y_max) / 2)
@@ -76,8 +74,8 @@ def erase_with_ellipse(image, bbox, padding_ratio=0.05, blur_size=25):
         result = (image * (1 - mask_norm) + 255 * mask_norm).astype(np.uint8)
     return result
 
-def format_for_sourceafis(erased_img):
-    """The Handoff Bridge."""
+def enhance_for_handoff(erased_img):
+    """Processes the image to be completely ready for the Go SourceAFIS port."""
     if len(erased_img.shape) == 3:
         gray = cv2.cvtColor(erased_img, cv2.COLOR_BGR2GRAY)
     else:
@@ -86,14 +84,14 @@ def format_for_sourceafis(erased_img):
     # Binarize to clean up the blurred ellipse gradient into sharp black/white
     _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     
-    # SourceAFIS requires an image byte stream
-    _, encoded_img = cv2.imencode(".png", binary)
-    return encoded_img.tobytes()
+    # Encode as PNG to send back to Go
+    _, buffer = cv2.imencode('.png', binary)
+    return base64.b64encode(buffer).decode('utf-8')
 
 @app.post("/api/v1/fingerprint/extract")
-async def extract_template(request: FingerprintRequest):
+async def extract_fingerprint(request: FingerprintRequest):
     try:
-        # 1. Decode Base64 sent from Go Backend
+        # Decode Base64 sent from Go Backend
         header, encoded = request.image_base64.split(",", 1) if "," in request.image_base64 else ("", request.image_base64)
         img_bytes = base64.b64decode(encoded)
         np_arr = np.frombuffer(img_bytes, np.uint8)
@@ -101,25 +99,23 @@ async def extract_template(request: FingerprintRequest):
         
         orig_h, orig_w = image.shape[:2]
         
-        # 2. Run SSD300 VGG16 Object Detection
+        # Run Object Detection to find overlap
         bbox_300, score = predict_bbox(model, image, transform)
         
-        # 3. Erase the overlap if detected
+        # Erase the overlap if detected
         if bbox_300 is not None and score >= CONFIDENCE_THRESHOLD:
             bbox = scale_bbox(bbox_300, (orig_w, orig_h))
-            processed_image = erase_with_ellipse(image, bbox) # Uses your default parameters
+            processed_image = erase_with_ellipse(image, bbox) 
         else:
-            processed_image = image # No overlap found, process normally
+            processed_image = image 
             
-        # 4. Extract Minutiae via SourceAFIS
-        safis_bytes = format_for_sourceafis(processed_image)
-        fingerprint_img = FingerprintImage(safis_bytes, 500)
-        template = FingerprintTemplate(fingerprint_img)
+        # Enhance and encode the cleaned image
+        clean_b64_image = enhance_for_handoff(processed_image)
         
         return {
             "status": "success",
             "confidence": float(score),
-            "iso_template": template.to_json()
+            "cleaned_image_base64": clean_b64_image # Sending image back instead of template
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy your FastAPI script and the PyTorch model file into the container
 COPY main.py .
-COPY best_model_val.pth .
+COPY best_model.pth .
 
 # Expose the port Uvicorn uses
 EXPOSE 8000
