@@ -1,0 +1,70 @@
+# =========================
+# Root & OS Dependencies
+# =========================
+.DS_Store
+Thumbs.db
+.env
+.env.local
+.env.*.local
+
+# =========================
+# IDE & Editor Folders
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# Frontend (React / Vite / Node)
+# =========================
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+
+# =========================
+# Backend (Go)
+# =========================
+# Ignore compiled Go binaries
+backend/bin/
+backend/*.exe
+backend/*.out
+backend/*.app
+# Ignore vendor directory if you use go mod vendor
+backend/vendor/
+
+# =========================
+# Python Microservice
+# =========================
+# Byte-compiled / optimized / DLL files
+python_microservice/__pycache__/
+python_microservice/*.py[cod]
+python_microservice/*$py.class
+
+# Virtual environments
+python_microservice/myvenv/
+python_microservice/.venv/
+python_microservice/env/
+
+# =========================
+# Machine Learning & Data Files
+# =========================
+# CRITICAL: Do not commit large PyTorch model weights to Git
+python_microservice/*.pth
+python_microservice/*.pt
+python_microservice/*.onnx
+
+# Ignore raw fingerprint dataset images and API test outputs
+*.png
+*.jpg
+*.jpeg
+*.tif
+*.tiff
+API_TEST_RESULT.png
+
+# Jupyter Notebook checkpoints (if you move your backend.ipynb here)
+.ipynb_checkpoints/
