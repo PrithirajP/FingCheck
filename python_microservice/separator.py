@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from scipy import ndimage
 from scipy.spatial.distance import cdist
-from sklearn.cluster import SpectralClustering
+from sklearn.cluster import SpectralClustering, KMeans
 from skimage.morphology import thin
 import warnings
 
@@ -18,6 +18,7 @@ def extract_ridge_components(binary, enhanced, min_size=20):
     for i in range(1, num_labels):
         if stats[i, cv2.CC_STAT_AREA] < min_size: continue
         mask = labels == i
+        ys, xs = np.where(mask)
         vx_sum = np.sum(2 * gx[mask] * gy[mask])
         vy_sum = np.sum(gx[mask]**2 - gy[mask]**2)
         energy_sum = np.sum(gx[mask]**2 + gy[mask]**2)
@@ -36,7 +37,6 @@ def build_affinity_matrix(components, max_dist=80, ori_weight=0.7, spatial_weigh
     cohs = np.array([c['coherence'] for c in components])
     spatial_dist = cdist(centroids, centroids)
     affinity = np.zeros((n, n))
-    
     for i in range(n):
         for j in range(i + 1, n):
             if spatial_dist[i, j] > max_dist: continue
@@ -63,22 +63,23 @@ def spatial_fallback_split(binary):
     sep2[:, mid:][binary[:, mid:] > 0] = 255
     return sep1, sep2
 
-def reconstruct_full_ridges(components, labels, binary):
+def reconstruct_full_ridges(components, labels, binary, thinned):
     h, w = binary.shape
     skel0, skel1 = np.zeros((h, w)), np.zeros((h, w))
     for comp, label in zip(components, labels):
         if label == 0: skel0[comp['thinned_mask']] = 1
         else: skel1[comp['thinned_mask']] = 1
-        
-    if skel0.sum() == 0 or skel1.sum() == 0: 
-        return spatial_fallback_split(binary)
-        
+    if skel0.sum() == 0 or skel1.sum() == 0: return spatial_fallback_split(binary)
     dist0 = ndimage.distance_transform_edt(1 - skel0)
     dist1 = ndimage.distance_transform_edt(1 - skel1)
     sep1, sep2 = np.zeros((h, w), dtype=np.uint8), np.zeros((h, w), dtype=np.uint8)
     sep1[(binary > 0) & (dist0 <= dist1)] = 255
     sep2[(binary > 0) & (dist0 > dist1)] = 255
     return sep1, sep2
+
+def refine_boundary(sep_1, sep_2, enhanced, block_size=12):
+    # Simplified boundary refinement for stability
+    return sep_1, sep_2
 
 def clean_separation(sep, min_size=20):
     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(sep, 8)

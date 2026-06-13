@@ -58,6 +58,7 @@ python_microservice/*.pth
 python_microservice/*.pt
 python_microservice/*.onnx
 
+
 # Ignore raw fingerprint dataset images and API test outputs
 *.png
 *.jpg
