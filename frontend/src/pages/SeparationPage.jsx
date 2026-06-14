@@ -1,18 +1,23 @@
-import { useState } from 'react';
-import { Upload, Layers, CheckCircle2, Fingerprint, Search, User } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { useAuth } from '@clerk/clerk-react';
+import { Upload, Layers, CheckCircle2, Fingerprint, Search, User, XCircle } from 'lucide-react';
+import { overlapService, matchService, setAuthToken } from '../services/api';
 
 export default function SeparationPage() {
+  const { getToken } = useAuth(); // Grab Clerk auth function
+  
   // --- STATE MANAGEMENT ---
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
-  
-  // Controls the pipeline stages: 'upload' -> 'separated' -> 'matched'
   const [stage, setStage] = useState('upload'); 
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // Holds the data returned from the backend
-  const [separatedPrints, setSeparatedPrints] = useState({ printA: null, printB: null });
+  // Holds data from the backend
+  const [separatedPrints, setSeparatedPrints] = useState({ id: null, printA: null, printB: null });
   const [matchResult, setMatchResult] = useState(null);
+
+  // Store the polling interval so we can clear it if needed
+  const pollingRef = useRef(null);
 
   // --- HANDLERS ---
   const handleFileChange = (e) => {
@@ -20,41 +25,105 @@ export default function SeparationPage() {
     if (selectedFile) {
       setFile(selectedFile);
       setPreview(URL.createObjectURL(selectedFile));
-      setStage('upload'); // Reset if they upload a new image
+      setStage('upload');
     }
   };
 
-  // STEP 2: Run Separation
+  // STEP 2: Run Separation (Upload to Go -> Poll for Completion)
   const handleSeparate = async () => {
     setIsProcessing(true);
-    // TODO: Wire this to your Go backend overlap_handler later
-    setTimeout(() => {
-      setSeparatedPrints({
-        printA: preview, // Placeholder: Will be actual backend URL
-        printB: preview, // Placeholder: Will be actual backend URL
-      });
+    
+    try {
+      // 1. Authorize the request
+      const token = await getToken();
+      setAuthToken(token);
+
+      // 2. Upload the file to Go backend
+      const uploadRes = await overlapService.upload(file);
+      
+      // Go returns data inside a 'data' object usually (e.g., uploadRes.data.id)
+      // Adjust this property path if your Go response structure differs slightly!
+      const overlapId = uploadRes.data.id; 
+
+      // 3. Start polling the backend to see when the goroutine finishes
+      pollingRef.current = setInterval(async () => {
+        try {
+          const myOverlapsRes = await overlapService.getMyOverlaps();
+          const myOverlaps = myOverlapsRes.data; // Array of user's overlaps
+          
+          // Find the exact one we just uploaded
+          const currentOverlap = myOverlaps.find(o => o.id === overlapId);
+
+          if (currentOverlap) {
+            // Check the status defined in your Go models (adjust strings if they are different in Go)
+            if (currentOverlap.processing_status === 'completed') {
+              clearInterval(pollingRef.current);
+              
+              setSeparatedPrints({
+                id: overlapId,
+                // Make sure these match the JSON keys your Go model returns for the separated images
+                printA: currentOverlap.component_a_url || preview, 
+                printB: currentOverlap.component_b_url || preview,
+              });
+              
+              setIsProcessing(false);
+              setStage('separated');
+            } else if (currentOverlap.processing_status === 'failed') {
+              clearInterval(pollingRef.current);
+              setIsProcessing(false);
+              alert("Server failed to process the fingerprint.");
+            }
+          }
+        } catch (pollError) {
+          console.error("Polling error:", pollError);
+        }
+      }, 2000); // Check every 2 seconds
+
+    } catch (error) {
+      console.error("Upload failed:", error);
       setIsProcessing(false);
-      setStage('separated');
-    }, 1500); // Simulating network request
+      alert("Failed to connect to the server.");
+    }
   };
 
   // STEP 4: Run Match Functionality
-  const handleMatch = async (selectedImage) => {
+  const handleMatch = async () => {
     setIsProcessing(true);
-    // TODO: Wire this to your Go backend match_handler later
-    setTimeout(() => {
-      setMatchResult({
-        matched: true,
-        personName: "John Doe", // Placeholder: Will come from database
-        confidence: "98.4%"
-      });
+    
+    try {
+      const token = await getToken();
+      setAuthToken(token);
+
+      // Send the parent Overlap ID to the match handler
+      const matchRes = await matchService.runMatch(separatedPrints.id);
+      const results = matchRes.data.results; // Array of match results from Go
+
+      // Check if any component found a match
+      const successfulMatch = results.find(r => r.is_match === true);
+
+      if (successfulMatch) {
+        setMatchResult({
+          matched: true,
+          personName: successfulMatch.status === 'found' ? 'Identity Confirmed' : 'Unknown', 
+          // Note: Your Go MatchHandler currently hides the matched name/confidence for non-admins. 
+          // It only returns 'found' or 'not found'.
+        });
+      } else {
+        setMatchResult({ matched: false });
+      }
+
       setIsProcessing(false);
       setStage('matched');
-    }, 1500); // Simulating network request
+
+    } catch (error) {
+      console.error("Matching failed:", error);
+      setIsProcessing(false);
+      alert("Failed to run match verification.");
+    }
   };
 
-  // Reset the whole pipeline
   const handleReset = () => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
     setFile(null);
     setPreview(null);
     setStage('upload');
@@ -91,56 +160,61 @@ export default function SeparationPage() {
             className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-800 text-white font-medium py-3 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
           >
             {isProcessing ? <Search className="w-5 h-5 animate-spin" /> : <Layers className="w-5 h-5" />}
-            {isProcessing ? 'Processing Separation...' : 'Execute Separation'}
+            {isProcessing ? 'Server Processing...' : 'Execute Separation'}
           </button>
         )}
       </div>
 
-      {/* STEP 3: Show separated images with option to match */}
+      {/* STEP 3: Show separated images */}
       {stage === 'separated' && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <h3 className="text-lg font-semibold text-white border-b border-slate-800 pb-2">Separated Outputs</h3>
-          <p className="text-sm text-slate-400">Select which isolated print you wish to run against the database.</p>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-            {/* Print A Option */}
             <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 text-center flex flex-col justify-between">
               <img src={separatedPrints.printA} alt="Print A" className="max-h-40 mx-auto rounded-lg mb-4 opacity-80" />
               <button 
-                onClick={() => handleMatch(separatedPrints.printA)} disabled={isProcessing}
-                className="w-full bg-slate-800 hover:bg-emerald-600/20 hover:text-emerald-400 hover:border-emerald-500/50 border border-slate-700 text-white py-2 rounded-lg transition flex justify-center gap-2 items-center cursor-pointer"
+                onClick={handleMatch} disabled={isProcessing}
+                className="w-full bg-slate-800 hover:bg-emerald-600/20 hover:text-emerald-400 border border-slate-700 text-white py-2 rounded-lg transition flex justify-center gap-2 items-center cursor-pointer"
               >
                 {isProcessing ? <Search className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
-                Match Print A
+                Run Match Verification
               </button>
             </div>
 
-            {/* Print B Option */}
             <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 text-center flex flex-col justify-between">
               <img src={separatedPrints.printB} alt="Print B" className="max-h-40 mx-auto rounded-lg mb-4 opacity-80" />
               <button 
-                onClick={() => handleMatch(separatedPrints.printB)} disabled={isProcessing}
-                className="w-full bg-slate-800 hover:bg-emerald-600/20 hover:text-emerald-400 hover:border-emerald-500/50 border border-slate-700 text-white py-2 rounded-lg transition flex justify-center gap-2 items-center cursor-pointer"
+                onClick={handleMatch} disabled={isProcessing}
+                className="w-full bg-slate-800 hover:bg-emerald-600/20 hover:text-emerald-400 border border-slate-700 text-white py-2 rounded-lg transition flex justify-center gap-2 items-center cursor-pointer"
               >
                 {isProcessing ? <Search className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
-                Match Print B
+                Run Match Verification
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* STEP 5: Show Fingerprint Matched and Name */}
-      {stage === 'matched' && matchResult && (
-        <div className="bg-emerald-950/30 border border-emerald-500/30 p-8 rounded-2xl text-center animate-in zoom-in duration-500">
-          <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
-          <h3 className="text-3xl font-bold text-white mb-2">Fingerprint Matched</h3>
-          
-          <div className="inline-flex items-center gap-3 bg-slate-900 px-6 py-3 rounded-full border border-slate-800 mt-4">
-            <User className="w-5 h-5 text-indigo-400" />
-            <span className="text-slate-300 text-sm uppercase tracking-wider">Identified Subject:</span>
-            <span className="text-white font-bold text-lg">{matchResult.personName}</span>
-          </div>
+      {/* STEP 5: Results */}
+      {stage === 'matched' && (
+        <div className={`p-8 rounded-2xl text-center animate-in zoom-in duration-500 border ${matchResult.matched ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-rose-950/30 border-rose-500/30'}`}>
+          {matchResult.matched ? (
+            <>
+              <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
+              <h3 className="text-3xl font-bold text-white mb-2">Fingerprint Matched</h3>
+              <div className="inline-flex items-center gap-3 bg-slate-900 px-6 py-3 rounded-full border border-slate-800 mt-4">
+                <User className="w-5 h-5 text-indigo-400" />
+                <span className="text-white font-bold text-lg">{matchResult.personName}</span>
+              </div>
+            </>
+          ) : (
+             <>
+              <XCircle className="w-16 h-16 text-rose-400 mx-auto mb-4" />
+              <h3 className="text-3xl font-bold text-white mb-2">No Match Found</h3>
+              <p className="text-slate-400">The database does not contain a verified match for these points.</p>
+            </>
+          )}
           
           <div className="mt-8">
             <button onClick={handleReset} className="text-sm text-slate-400 hover:text-white transition underline cursor-pointer">
