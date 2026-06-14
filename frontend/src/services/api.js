@@ -60,14 +60,44 @@ export const matchService = {
 
 // --- ADMIN SERVICES ---
 export const adminService = {
-  // Uploads known database prints with a label (e.g., suspect name)
-  uploadKnownFingerprint: async (file, label) => {
+  // Flow A: User Management
+  getAllUsers: async (page = 1, pageSize = 10) => {
+    const response = await api.get(`/admin/users?page=${page}&page_size=${pageSize}`);
+    return response.data;
+  },
+  updateRole: async (id, role) => {
+    const response = await api.put(`/admin/users/${id}/role`, { role });
+    return response.data;
+  },
+  deleteUser: async (id) => {
+    const response = await api.delete(`/admin/users/${id}`);
+    return response.data;
+  },
+
+  // Flow B: Target Database
+  uploadTargetPrint: async (file, label, deviceMeta = "") => {
     const formData = new FormData();
     formData.append('image', file);
     formData.append('label', label);
+    if (deviceMeta) formData.append('metadata', deviceMeta);
+    
     const response = await api.post('/admin/fingerprints', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    return response.data;
+  },
+
+  // Flow C & D: Admin Overlap & Matching
+  getAllOverlaps: async (page = 1, pageSize = 10) => {
+    const response = await api.get(`/admin/overlaps?page=${page}&page_size=${pageSize}`);
+    return response.data;
+  },
+  getOverlapById: async (id) => {
+    const response = await api.get(`/admin/overlaps/${id}`);
+    return response.data;
+  },
+  getAllMatches: async (page = 1, pageSize = 10) => {
+    const response = await api.get(`/admin/matches?page=${page}&page_size=${pageSize}`);
     return response.data;
   }
 };

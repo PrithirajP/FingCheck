@@ -6,6 +6,9 @@ import DashboardLayout from './layouts/DashboardLayout';
 import SeparationPage from './pages/SeparationPage';
 import MatchingPage from './pages/MatchingPage';
 import LandingPage from './pages/LandingPage';
+import AdminLayout from './layouts/AdminLayout';
+import UserManagement from './pages/Admin/UserManagement';
+import TargetDatabase from './pages/Admin/TargetDatabase';
 import { useState } from 'react';
 
 export default function App() {
@@ -28,17 +31,30 @@ export default function App() {
           </ProtectedRoute>
         } />
 
-        {/* Secure Administrative Workspace Route */}
-        <Route path="/admin/dashboard" element={
-          <ProtectedRoute allowedRole="admin">
-            <DashboardLayout activeTab="admin" setActiveTab={() => {}}>
-              <div className="p-6 bg-slate-950 rounded-2xl border border-slate-800">
-                <h2 className="text-xl font-bold text-amber-400 mb-2">System Audit Logs</h2>
-                <p className="text-slate-400 text-sm">Administrative oversight for FingCheck API usage metrics and operations tracker.</p>
-              </div>
-            </DashboardLayout>
-          </ProtectedRoute>
-        } />
+       {/* 3. Secure Administrative Workspace Route */}
+     <Route path="/admin/dashboard" element={
+       <ProtectedRoute allowedRole="admin">
+         <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+
+           {activeTab === 'overview' && (
+             <div><h2 className="text-2xl font-bold text-white mb-4">System Overview</h2></div>
+           )}
+
+           {activeTab === 'users' && <UserManagement />}
+
+           {activeTab === 'targets' && <TargetDatabase />}
+
+           {activeTab === 'analysis' && (
+             <div><h2 className="text-2xl font-bold text-white mb-4">Overlap Analysis (Admin View)</h2></div>
+           )}
+
+           {activeTab === 'audit' && (
+             <div><h2 className="text-2xl font-bold text-white mb-4">Security Audit Logs</h2></div>
+           )}
+
+         </AdminLayout>
+       </ProtectedRoute>
+     } />
 
         <Route path="/" element={<LandingPage />} />
 
