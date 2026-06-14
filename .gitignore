@@ -69,3 +69,6 @@ API_TEST_RESULT.png
 
 # Jupyter Notebook checkpoints (if you move your backend.ipynb here)
 .ipynb_checkpoints/
+node_modules/
+.env/
+venv/
