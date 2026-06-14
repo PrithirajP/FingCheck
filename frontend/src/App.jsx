@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
 import SeparationPage from './pages/SeparationPage';
 import MatchingPage from './pages/MatchingPage';
+import LandingPage from './pages/LandingPage';
 import { useState } from 'react';
 
 export default function App() {
@@ -38,6 +39,8 @@ export default function App() {
             </DashboardLayout>
           </ProtectedRoute>
         } />
+
+        <Route path="/" element={<LandingPage />} />
 
         {/* Catch-all Routing Redirect */}
         <Route path="*" element={<Navigate to="/login" replace />} />
