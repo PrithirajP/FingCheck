@@ -12,16 +12,19 @@ export default function UserManagement() {
     loadUsers();
   }, []);
 
-  const loadUsers = async () => {
+const loadUsers = async () => {
     setIsLoading(true);
     try {
-      // 1. Get the token and attach it to the API
       const token = await getToken();
       setAuthToken(token);
       
-      // 2. Fetch the data
-      const data = await adminService.getAllUsers();
-      setUsers(data.users || []);
+      const result = await adminService.getAllUsers();
+      console.log("SAFE RESULT:", result); // Let's keep our eyes on it
+      
+      // This checks every possible place the backend might have hidden the array
+      const extractedUsers = result?.data?.users || result?.users || [];
+      
+      setUsers(extractedUsers);
     } catch (error) {
       console.error("Failed to fetch users", error);
     } finally {
