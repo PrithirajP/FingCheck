@@ -23,6 +23,7 @@ func SetupRouter(h *Handlers, cfg *config.Config) *gin.Engine {
 	r := gin.Default()
 
 	r.Use(CORSMiddleware())
+	r.Static("/uploads", cfg.UploadDir)
 
 	v1 := r.Group("/api/v1")
 	{

@@ -1,129 +1,111 @@
-import { useState } from 'react';
-import { Upload, CheckCircle2, XCircle, Search, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/clerk-react';
+import { CheckCircle2, XCircle, Search, Fingerprint, Database } from 'lucide-react';
+import { overlapService, matchService, setAuthToken } from '../services/api';
 
 export default function MatchingPage() {
-  const [probe, setProbe] = useState({ file: null, preview: null });
-  const [candidate, setCandidate] = useState({ file: null, preview: null });
+  const { getToken } = useAuth();
+  
+  const [overlaps, setOverlaps] = useState([]);
+  const [selectedOverlapId, setSelectedOverlapId] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState(null);
 
-  const handleUpload = (e, target) => {
-    const file = e.target.files[0];
-    if (file) {
-      const data = { file, preview: URL.createObjectURL(file) };
-      if (target === 'probe') setProbe(data);
-      else setCandidate(data);
-    }
-  };
+  // Fetch the user's previously separated prints to choose from
+  useEffect(() => {
+    const fetchOverlaps = async () => {
+      const token = await getToken();
+      setAuthToken(token);
+      try {
+        const res = await overlapService.getMyOverlaps();
+        // Only show completed ones that can be matched
+        setOverlaps(res.data?.filter(o => o.processing_status === 'completed') || []);
+      } catch (err) {
+        console.error("Failed to load overlaps", err);
+      }
+    };
+    fetchOverlaps();
+  }, [getToken]);
 
-  const clearImage = (target) => {
-    if (target === 'probe') setProbe({ file: null, preview: null });
-    else setCandidate({ file: null, preview: null });
-    setResult(null); // Clear result if they change an image
-  };
-
-  const handleVerify = () => {
-    if (!probe.file || !candidate.file) return;
+  const handleVerify = async () => {
+    if (!selectedOverlapId) return;
     setIsProcessing(true);
     setResult(null);
 
-    // Simulate backend verification delay
-    setTimeout(() => {
-      // Mocking a successful match for demonstration
-      setResult({
-        matched: true,
-        score: 96.8,
-      });
+    try {
+      const token = await getToken();
+      setAuthToken(token);
+
+      // Trigger the Go SourceAFIS matching engine
+      const matchRes = await matchService.runMatch(selectedOverlapId);
+      
+      // Look at the results (User route returns "found" or "not found")
+      const matches = matchRes.data.results || [];
+      const successfulMatch = matches.find(m => m.status === "found");
+
+      if (successfulMatch) {
+        setResult({ matched: true, component: successfulMatch.component_index });
+      } else {
+        setResult({ matched: false });
+      }
+    } catch (err) {
+      console.error("Match Error:", err);
+      alert("Verification failed to run.");
+    } finally {
       setIsProcessing(false);
-    }, 1500);
+    }
   };
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto">
+    <div className="p-8 max-w-4xl mx-auto space-y-8">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-white">1-to-1 Verification</h2>
-        <p className="text-slate-400 text-sm">Compare two discrete prints directly to extract a confidence score.</p>
+        <h1 className="text-3xl font-bold text-white tracking-tight">1-to-1 Verification</h1>
+        <p className="text-slate-400 mt-2">Compare separated latent prints against the Target Database.</p>
       </div>
 
-      {/* Upload Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-        {/* Probe Input */}
-        <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 text-center relative flex flex-col items-center justify-center min-h-[250px]">
-          {probe.preview ? (
-            <div className="relative w-full h-full flex flex-col items-center justify-center">
-              <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-3">Probe Image</span>
-              <img src={probe.preview} alt="Probe" className="max-h-40 rounded-lg object-contain" />
-              <button onClick={() => clearImage('probe')} className="mt-4 text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 z-20 cursor-pointer">
-                <X className="w-3 h-3" /> Remove
-              </button>
-            </div>
-          ) : (
-            <>
-              <input type="file" onChange={(e) => handleUpload(e, 'probe')} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-              <div className="p-6 text-slate-500 pointer-events-none">
-                <Upload className="w-8 h-8 mx-auto mb-2 text-indigo-500/50" />
-                <p className="font-medium text-slate-300">Upload Probe</p>
-                <p className="text-xs mt-1">(Crime Scene Print)</p>
-              </div>
-            </>
-          )}
+      <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl space-y-6">
+        <div>
+          <label className="text-sm font-medium text-slate-300 flex items-center gap-2 mb-2">
+            <Database className="w-4 h-4 text-indigo-400" /> Select Separated Print to Match
+          </label>
+          <select 
+            value={selectedOverlapId} 
+            onChange={(e) => setSelectedOverlapId(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none"
+          >
+            <option value="">-- Choose a Processed Print --</option>
+            {overlaps.map(o => (
+              <option key={o.id} value={o.id}>Overlap ID: {o.id.slice(-6)} (Created: {new Date(o.created_at).toLocaleDateString()})</option>
+            ))}
+          </select>
         </div>
 
-        {/* Candidate Input */}
-        <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 text-center relative flex flex-col items-center justify-center min-h-[250px]">
-          {candidate.preview ? (
-            <div className="relative w-full h-full flex flex-col items-center justify-center">
-              <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-3">Candidate Image</span>
-              <img src={candidate.preview} alt="Candidate" className="max-h-40 rounded-lg object-contain" />
-              <button onClick={() => clearImage('candidate')} className="mt-4 text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 z-20 cursor-pointer">
-                <X className="w-3 h-3" /> Remove
-              </button>
-            </div>
-          ) : (
-            <>
-              <input type="file" onChange={(e) => handleUpload(e, 'candidate')} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-              <div className="p-6 text-slate-500 pointer-events-none">
-                <Upload className="w-8 h-8 mx-auto mb-2 text-emerald-500/50" />
-                <p className="font-medium text-slate-300">Upload Candidate</p>
-                <p className="text-xs mt-1">(Database Suspect Print)</p>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Action Button */}
-      <div className="text-center">
         <button 
-          onClick={handleVerify} 
-          disabled={!probe.file || !candidate.file || isProcessing} 
-          className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl font-semibold transition flex items-center justify-center gap-2 mx-auto cursor-pointer"
+          onClick={handleVerify} disabled={!selectedOverlapId || isProcessing} 
+          className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-800 text-white rounded-xl font-semibold transition flex items-center justify-center gap-2 cursor-pointer"
         >
-          {isProcessing ? <Search className="w-5 h-5 animate-spin" /> : null}
-          {isProcessing ? 'Analyzing Minutiae Points...' : 'Run Cross-Match Verification'}
+          {isProcessing ? <Search className="w-5 h-5 animate-spin" /> : <Fingerprint className="w-5 h-5" />}
+          {isProcessing ? 'Querying Target Database...' : 'Run Cross-Match Verification'}
         </button>
       </div>
 
-      {/* Results Output */}
       {result && (
-        <div className={`mt-8 p-8 rounded-2xl border text-center max-w-lg mx-auto animate-in zoom-in duration-300 ${
+        <div className={`mt-8 p-8 rounded-2xl border text-center animate-in zoom-in duration-300 ${
           result.matched ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-rose-950/30 border-rose-500/30'
         }`}>
           {result.matched ? (
-            <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
+            <>
+              <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
+              <h4 className="text-2xl font-bold text-white mb-2">Positive Verification</h4>
+              <p className="text-emerald-400">Match found in Target Database for Print Component {result.component}</p>
+            </>
           ) : (
-            <XCircle className="w-16 h-16 text-rose-400 mx-auto mb-4" />
+            <>
+              <XCircle className="w-16 h-16 text-rose-400 mx-auto mb-4" />
+              <h4 className="text-2xl font-bold text-white mb-2">Verification Rejected</h4>
+              <p className="text-rose-400">No match found in Target Database.</p>
+            </>
           )}
-          
-          <h4 className="text-2xl font-bold text-white mb-2">
-            {result.matched ? 'Positive Verification' : 'Verification Rejected'}
-          </h4>
-          
-          <div className="bg-slate-900/50 py-3 px-6 rounded-lg inline-block mt-2 border border-slate-800">
-            <p className="text-slate-400 text-sm">Similarity Score</p>
-            <p className="font-mono text-2xl text-white font-bold">{result.score}%</p>
-          </div>
         </div>
       )}
     </div>

@@ -1,25 +1,23 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
-import { Upload, Layers, CheckCircle2, Fingerprint, Search, User, XCircle } from 'lucide-react';
-import { overlapService, matchService, setAuthToken } from '../services/api';
+import { Upload, Layers, CheckCircle2, Fingerprint, Search, User, XCircle, Loader2 } from 'lucide-react';
+import { overlapService, setAuthToken } from '../services/api';
 
 export default function SeparationPage() {
-  const { getToken } = useAuth(); // Grab Clerk auth function
+  const { getToken } = useAuth();
   
-  // --- STATE MANAGEMENT ---
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [stage, setStage] = useState('upload'); 
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // Holds data from the backend
   const [separatedPrints, setSeparatedPrints] = useState({ id: null, printA: null, printB: null });
-  const [matchResult, setMatchResult] = useState(null);
-
-  // Store the polling interval so we can clear it if needed
   const pollingRef = useRef(null);
 
-  // --- HANDLERS ---
+  useEffect(() => {
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, []);
+
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
@@ -29,198 +27,129 @@ export default function SeparationPage() {
     }
   };
 
-  // STEP 2: Run Separation (Upload to Go -> Poll for Completion)
   const handleSeparate = async () => {
+    if (!file) return;
     setIsProcessing(true);
-    
+    setStage('processing');
+
     try {
-      // 1. Authorize the request
       const token = await getToken();
       setAuthToken(token);
 
-      // 2. Upload the file to Go backend
       const uploadRes = await overlapService.upload(file);
-      
-      // Go returns data inside a 'data' object usually (e.g., uploadRes.data.id)
-      // Adjust this property path if your Go response structure differs slightly!
-      const overlapId = uploadRes.data.id; 
+      const newOverlapId = uploadRes.data.id;
 
-      // 3. Start polling the backend to see when the goroutine finishes
       pollingRef.current = setInterval(async () => {
-        try {
-          const myOverlapsRes = await overlapService.getMyOverlaps();
-          const myOverlaps = myOverlapsRes.data; // Array of user's overlaps
-          
-          // Find the exact one we just uploaded
-          const currentOverlap = myOverlaps.find(o => o.id === overlapId);
+        const checkRes = await overlapService.getMyOverlaps();
+        const currentOverlap = checkRes.data.find(o => o.id === newOverlapId);
 
-          if (currentOverlap) {
-            // Check the status defined in your Go models (adjust strings if they are different in Go)
-            if (currentOverlap.processing_status === 'completed') {
-              clearInterval(pollingRef.current);
-              
-              setSeparatedPrints({
-                id: overlapId,
-                // Make sure these match the JSON keys your Go model returns for the separated images
-                printA: currentOverlap.component_a_url || preview, 
-                printB: currentOverlap.component_b_url || preview,
-              });
-              
-              setIsProcessing(false);
-              setStage('separated');
-            } else if (currentOverlap.processing_status === 'failed') {
-              clearInterval(pollingRef.current);
-              setIsProcessing(false);
-              alert("Server failed to process the fingerprint.");
-            }
+        if (currentOverlap) {
+          // DEBUG LOG: Prints the exact JSON object from Go to your browser console
+          console.log("RAW BACKEND DATA:", currentOverlap);
+
+          if (currentOverlap.processing_status === 'completed') {
+            clearInterval(pollingRef.current);
+            setSeparatedPrints({
+              id: currentOverlap.id,
+              // Adding fallbacks just in case the JSON casing is strictly capitalized
+              printA: currentOverlap.separated_image_1_url || currentOverlap.SeparatedImage1URL,
+              printB: currentOverlap.separated_image_2_url || currentOverlap.SeparatedImage2URL
+            });
+            setIsProcessing(false);
+            setStage('completed');
+          } else if (currentOverlap.processing_status === 'failed') {
+            clearInterval(pollingRef.current);
+            alert("Backend processing failed: " + currentOverlap.processing_log);
+            setIsProcessing(false);
+            setStage('upload');
           }
-        } catch (pollError) {
-          console.error("Polling error:", pollError);
         }
-      }, 2000); // Check every 2 seconds
+      }, 3000);
 
     } catch (error) {
-      console.error("Upload failed:", error);
+      console.error("Separation Error:", error);
+      alert("Failed to upload fingerprint.");
       setIsProcessing(false);
-      alert("Failed to connect to the server.");
+      setStage('upload');
     }
   };
 
-  // STEP 4: Run Match Functionality
-  const handleMatch = async () => {
-    setIsProcessing(true);
-    
-    try {
-      const token = await getToken();
-      setAuthToken(token);
-
-      // Send the parent Overlap ID to the match handler
-      const matchRes = await matchService.runMatch(separatedPrints.id);
-      const results = matchRes.data.results; // Array of match results from Go
-
-      // Check if any component found a match
-      const successfulMatch = results.find(r => r.is_match === true);
-
-      if (successfulMatch) {
-        setMatchResult({
-          matched: true,
-          personName: successfulMatch.status === 'found' ? 'Identity Confirmed' : 'Unknown', 
-          // Note: Your Go MatchHandler currently hides the matched name/confidence for non-admins. 
-          // It only returns 'found' or 'not found'.
-        });
-      } else {
-        setMatchResult({ matched: false });
-      }
-
-      setIsProcessing(false);
-      setStage('matched');
-
-    } catch (error) {
-      console.error("Matching failed:", error);
-      setIsProcessing(false);
-      alert("Failed to run match verification.");
-    }
-  };
-
-  const handleReset = () => {
-    if (pollingRef.current) clearInterval(pollingRef.current);
-    setFile(null);
-    setPreview(null);
-    setStage('upload');
-    setMatchResult(null);
+  // Safe URL formatter that prevents crashes if the path is missing
+  const formatImageUrl = (path) => {
+    if (!path) return null;
+    return `http://localhost:8080/${path.replace(/\\/g, '/')}`;
   };
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto">
+    <div className="p-8 max-w-5xl mx-auto space-y-8">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-white">Fingerprint Analysis Pipeline</h2>
-        <p className="text-slate-400 text-sm">Upload, separate, and cross-reference latent prints.</p>
+        <h1 className="text-3xl font-bold text-white tracking-tight">Fingerprint Pipeline</h1>
+        <p className="text-slate-400 mt-2">Upload an overlapping latent print to isolate individual ridge structures.</p>
       </div>
 
-      {/* STEP 1: Interface to upload image */}
-      <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800">
-        <div className="relative border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl p-8 text-center bg-slate-900/50 transition-colors">
-          <input 
-            type="file" accept="image/*" onChange={handleFileChange} 
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
-          />
-          {preview ? (
-            <img src={preview} alt="Upload" className="max-h-48 mx-auto rounded-lg object-contain border border-slate-700" />
-          ) : (
-            <div className="space-y-2 pointer-events-none">
-              <Upload className="w-10 h-10 mx-auto text-slate-500 mb-2" />
-              <p className="text-slate-300 font-medium">Upload overlapping fingerprint</p>
-            </div>
-          )}
-        </div>
-
-        {stage === 'upload' && (
+      {stage === 'upload' && (
+        <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl">
+          <div className="border-2 border-dashed border-slate-700 rounded-xl p-12 text-center hover:bg-slate-800/50 transition">
+            <input type="file" id="fp-upload" className="hidden" accept="image/png, image/jpeg" onChange={handleFileChange} />
+            <label htmlFor="fp-upload" className="cursor-pointer flex flex-col items-center">
+              {preview ? (
+                <img src={preview} alt="Preview" className="h-64 object-contain rounded-lg shadow-lg mb-4" />
+              ) : (
+                <Upload className="w-12 h-12 text-indigo-500 mb-4" />
+              )}
+              <span className="text-slate-300 font-medium">Select Latent Print Image</span>
+            </label>
+          </div>
           <button 
             onClick={handleSeparate} disabled={!file || isProcessing}
-            className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-800 text-white font-medium py-3 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-800 text-white font-semibold py-3 rounded-xl flex justify-center gap-2"
           >
-            {isProcessing ? <Search className="w-5 h-5 animate-spin" /> : <Layers className="w-5 h-5" />}
-            {isProcessing ? 'Server Processing...' : 'Execute Separation'}
+            <Layers className="w-5 h-5" /> Execute Separation Algorithm
           </button>
-        )}
-      </div>
-
-      {/* STEP 3: Show separated images */}
-      {stage === 'separated' && (
-        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <h3 className="text-lg font-semibold text-white border-b border-slate-800 pb-2">Separated Outputs</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-            <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 text-center flex flex-col justify-between">
-              <img src={separatedPrints.printA} alt="Print A" className="max-h-40 mx-auto rounded-lg mb-4 opacity-80" />
-              <button 
-                onClick={handleMatch} disabled={isProcessing}
-                className="w-full bg-slate-800 hover:bg-emerald-600/20 hover:text-emerald-400 border border-slate-700 text-white py-2 rounded-lg transition flex justify-center gap-2 items-center cursor-pointer"
-              >
-                {isProcessing ? <Search className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
-                Run Match Verification
-              </button>
-            </div>
-
-            <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 text-center flex flex-col justify-between">
-              <img src={separatedPrints.printB} alt="Print B" className="max-h-40 mx-auto rounded-lg mb-4 opacity-80" />
-              <button 
-                onClick={handleMatch} disabled={isProcessing}
-                className="w-full bg-slate-800 hover:bg-emerald-600/20 hover:text-emerald-400 border border-slate-700 text-white py-2 rounded-lg transition flex justify-center gap-2 items-center cursor-pointer"
-              >
-                {isProcessing ? <Search className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
-                Run Match Verification
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
-      {/* STEP 5: Results */}
-      {stage === 'matched' && (
-        <div className={`p-8 rounded-2xl text-center animate-in zoom-in duration-500 border ${matchResult.matched ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-rose-950/30 border-rose-500/30'}`}>
-          {matchResult.matched ? (
-            <>
-              <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
-              <h3 className="text-3xl font-bold text-white mb-2">Fingerprint Matched</h3>
-              <div className="inline-flex items-center gap-3 bg-slate-900 px-6 py-3 rounded-full border border-slate-800 mt-4">
-                <User className="w-5 h-5 text-indigo-400" />
-                <span className="text-white font-bold text-lg">{matchResult.personName}</span>
-              </div>
-            </>
-          ) : (
-             <>
-              <XCircle className="w-16 h-16 text-rose-400 mx-auto mb-4" />
-              <h3 className="text-3xl font-bold text-white mb-2">No Match Found</h3>
-              <p className="text-slate-400">The database does not contain a verified match for these points.</p>
-            </>
-          )}
+      {stage === 'processing' && (
+        <div className="bg-slate-900 border border-slate-800 p-16 rounded-2xl text-center space-y-6">
+          <Loader2 className="w-16 h-16 text-indigo-500 mx-auto animate-spin" />
+          <h3 className="text-2xl font-bold text-white">Algorithm Processing</h3>
+          <p className="text-slate-400">Communicating with Python Microservice. Extracting minutiae and separating ridge flows...</p>
+        </div>
+      )}
+
+      {stage === 'completed' && (
+        <div className="bg-slate-900 border border-emerald-500/30 p-8 rounded-2xl text-center">
+          <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
+          <h3 className="text-2xl font-bold text-white">Separation Successful</h3>
+          <p className="text-slate-400 mb-8">Isolated prints have been saved to the database. Overlap ID: {separatedPrints.id}</p>
           
-          <div className="mt-8">
-            <button onClick={handleReset} className="text-sm text-slate-400 hover:text-white transition underline cursor-pointer">
-              Start New Analysis
-            </button>
+          <div className="grid grid-cols-2 gap-8">
+             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+               <span className="text-sm font-bold text-slate-500 block mb-2">Subject A (Background)</span>
+               {separatedPrints.printA ? (
+                 <img 
+                   src={formatImageUrl(separatedPrints.printA)} 
+                   alt="Subject A" 
+                   className="h-48 w-full object-contain rounded-lg shadow-md" 
+                 />
+               ) : (
+                 <div className="h-48 bg-slate-800 rounded flex items-center justify-center text-slate-500 font-mono text-sm">IMAGE DATA MISSING</div>
+               )}
+             </div>
+             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+               <span className="text-sm font-bold text-slate-500 block mb-2">Subject B (Foreground)</span>
+               {separatedPrints.printB ? (
+                 <img 
+                   src={formatImageUrl(separatedPrints.printB)} 
+                   alt="Subject B" 
+                   className="h-48 w-full object-contain rounded-lg shadow-md" 
+                 />
+               ) : (
+                 <div className="h-48 bg-slate-800 rounded flex items-center justify-center text-slate-500 font-mono text-sm">IMAGE DATA MISSING</div>
+               )}
+             </div>
           </div>
+          <button onClick={() => { setFile(null); setPreview(null); setStage('upload'); }} className="mt-8 px-6 py-2 bg-slate-800 hover:bg-slate-700 transition text-white rounded-lg">Process Another Print</button>
         </div>
       )}
     </div>
