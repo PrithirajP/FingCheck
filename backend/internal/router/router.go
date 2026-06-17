@@ -39,6 +39,7 @@ func SetupRouter(h *Handlers, cfg *config.Config) *gin.Engine {
 			auth.POST("/match", h.MatchHandler.MatchFingerprint)
 			auth.GET("/match/:id", h.MatchHandler.GetMatchResult)
 			auth.GET("/overlaps/my", h.OverlapHandler.GetMyOverlaps)
+			auth.POST("/match/direct", h.MatchHandler.DirectMatch)
 
 			// Admin routes
 			admin := auth.Group("/admin")

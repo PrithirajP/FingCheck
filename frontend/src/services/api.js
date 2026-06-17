@@ -50,6 +50,15 @@ export const matchService = {
     });
     return response.data;
   },
+
+  runDirectMatch: async (file) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await api.post('/match/direct', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
   
   // Gets history of user matches
   getMyMatches: async () => {

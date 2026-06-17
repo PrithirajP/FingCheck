@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"io"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -193,3 +194,38 @@ func (h *MatchHandler) GetAllMatches(c *gin.Context) {
 		"page_size": pageSize,
 	})
 }
+
+// DirectMatch handles uploading a raw image and searching the DB directly.
+func (h *MatchHandler) DirectMatch(c *gin.Context) {
+	file, err := c.FormFile("image")
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "Image file is required", err.Error())
+		return
+	}
+
+	fileContent, err := file.Open()
+	if err != nil {
+		response.InternalError(c, "Failed to open image file")
+		return
+	}
+	defer fileContent.Close()
+
+	imageBytes, err := io.ReadAll(fileContent)
+	if err != nil {
+		response.InternalError(c, "Failed to read image file")
+		return
+	}
+
+	searcherID := c.MustGet("userID").(primitive.ObjectID)
+
+	results, err := h.matchService.DirectMatch(c.Request.Context(), imageBytes, searcherID)
+	if err != nil {
+		response.InternalError(c, "Failed to execute direct match")
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Direct match executed successfully", gin.H{
+		"results": results,
+	})
+}
+
