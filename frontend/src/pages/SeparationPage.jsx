@@ -1,20 +1,22 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
-import { Upload, Layers, CheckCircle2, Fingerprint, Search, XCircle, Loader2, Database, ArrowLeft, SplitSquareHorizontal } from 'lucide-react';
+import { Upload, Layers, CheckCircle2, Fingerprint, Search, Loader2, Database, ArrowLeft, SplitSquareHorizontal, Scale } from 'lucide-react';
 import { overlapService, matchService, setAuthToken } from '../services/api';
 
 export default function SeparationPage() {
   const { getToken } = useAuth();
   const [mode, setMode] = useState('menu'); 
 
-  // --- OVERLAP PIPELINE STATE ---
+  // --- GLOBAL STATE ---
+  const [overlaps, setOverlaps] = useState([]); // Holds DB overlap records
+
+  // --- OVERLAP STATE ---
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [stage, setStage] = useState('upload');
   const [isProcessing, setIsProcessing] = useState(false);
   const [separatedPrints, setSeparatedPrints] = useState({ id: null, printA: null, printB: null });
   const pollingRef = useRef(null);
-
   const [matchResultA, setMatchResultA] = useState(null);
   const [matchResultB, setMatchResultB] = useState(null);
   const [isMatchingA, setIsMatchingA] = useState(false);
@@ -26,20 +28,49 @@ export default function SeparationPage() {
   const [isDirectMatching, setIsDirectMatching] = useState(false);
   const [directMatchResult, setDirectMatchResult] = useState(null);
 
+  // --- TRUE 1-TO-1 COMPARE STATE ---
+  const [compFile1, setCompFile1] = useState(null); // Can be a File object OR a string URL
+  const [compPreview1, setCompPreview1] = useState(null);
+  const [compFile2, setCompFile2] = useState(null); // Can be a File object OR a string URL
+  const [compPreview2, setCompPreview2] = useState(null);
+  const [isComparing, setIsComparing] = useState(false);
+  const [compareResult, setCompareResult] = useState(null);
+
+  // --- EFFECTS ---
   useEffect(() => {
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, []);
 
+  // Fetch past overlaps when entering Match or Compare modes
+  useEffect(() => {
+    if (mode === 'match' || mode === 'compare') {
+      const fetchOverlaps = async () => {
+        const token = await getToken(); setAuthToken(token);
+        try {
+          const res = await overlapService.getMyOverlaps();
+          setOverlaps(res.data?.filter(o => o.processing_status === 'completed') || []);
+        } catch (err) {
+          console.error("Failed to load overlaps", err);
+        }
+      };
+      fetchOverlaps();
+    }
+  }, [mode, getToken]);
+
+
+  // --- UTILS ---
   const resetToMenu = () => {
     setMode('menu');
     setFile(null); setPreview(null); setStage('upload');
     setMatchResultA(null); setMatchResultB(null);
     setDirectFile(null); setDirectPreview(null); setDirectMatchResult(null);
+    setCompFile1(null); setCompPreview1(null); setCompFile2(null); setCompPreview2(null); setCompareResult(null);
   };
 
   const formatImageUrl = (path) => path ? `http://localhost:8080/${path.replace(/\\/g, '/')}` : null;
 
-  // --- OVERLAP HANDLERS ---
+
+  // --- HANDLERS ---
   const handleSeparate = async () => {
     if (!file) return;
     setIsProcessing(true); setStage('processing');
@@ -77,8 +108,7 @@ export default function SeparationPage() {
     try {
       const token = await getToken(); setAuthToken(token);
       const matchRes = await matchService.runMatch(separatedPrints.id);
-      const specificMatch = matchRes.data.results.find(m => m.component_index === componentIndex && m.status === "found" || m.is_match);
-      
+      const specificMatch = matchRes.data.results.find(m => m.component_index === componentIndex && (m.status === "found" || m.is_match));
       componentIndex === 1 ? setMatchResultA({ matched: !!specificMatch }) : setMatchResultB({ matched: !!specificMatch });
     } catch (err) {
       alert("Verification failed.");
@@ -87,13 +117,20 @@ export default function SeparationPage() {
     }
   };
 
-  // --- DIRECT MATCH HANDLERS ---
   const handleDirectMatch = async () => {
     if (!directFile) return;
     setIsDirectMatching(true); setDirectMatchResult(null);
     try {
       const token = await getToken(); setAuthToken(token);
-      const matchRes = await matchService.runDirectMatch(directFile);
+      // If user selected from dropdown, it's a URL. We must convert it to a File.
+      let fileToUpload = directFile;
+      if (typeof directFile === 'string') {
+        const res = await fetch(directFile);
+        const blob = await res.blob();
+        fileToUpload = new File([blob], "target_print.png", { type: blob.type });
+      }
+
+      const matchRes = await matchService.runDirectMatch(fileToUpload);
       const successfulMatch = matchRes.data.results.find(m => m.is_match || m.status === "found");
       setDirectMatchResult({ matched: !!successfulMatch });
     } catch (err) {
@@ -103,8 +140,83 @@ export default function SeparationPage() {
     }
   };
 
+  const handleCompare = async () => {
+    if (!compFile1 || !compFile2) return;
+    setIsComparing(true); setCompareResult(null);
+    try {
+      const token = await getToken(); setAuthToken(token);
+      
+      // Helper to dynamically convert URLs back to File objects for the Go backend
+      const ensureFile = async (source, filename) => {
+        if (source instanceof File) return source;
+        const res = await fetch(source);
+        const blob = await res.blob();
+        return new File([blob], filename, { type: blob.type });
+      };
 
-  // ================= RENDER BLOCKS =================
+      const f1 = await ensureFile(compFile1, "probe.png");
+      const f2 = await ensureFile(compFile2, "target.png");
+
+      const res = await matchService.compareTwo(f1, f2);
+      setCompareResult({ matched: res.data.is_match, score: res.data.score });
+    } catch (err) {
+      console.error(err);
+      alert("Comparison failed.");
+    } finally {
+      setIsComparing(false);
+    }
+  };
+
+
+  // ================= RENDER COMPONENTS =================
+
+  // Reusable UI for selecting/uploading a print in the Compare and Direct Match views
+  const renderSelectionBox = (label, fileState, previewState, setFile, setPreview) => (
+    <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl text-center flex flex-col h-full">
+      <span className="text-sm font-bold text-slate-400 block mb-4">{label}</span>
+      
+      <select 
+        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-white focus:border-amber-500 focus:outline-none mb-4"
+        onChange={(e) => {
+          if(e.target.value) {
+            setFile(e.target.value);
+            setPreview(e.target.value);
+          }
+        }}
+      >
+        <option value="">-- Select from Database --</option>
+        {overlaps.map(o => {
+          const img1 = o.separated_image_1_url || o.SeparatedImage1URL;
+          const img2 = o.separated_image_2_url || o.SeparatedImage2URL;
+          return (
+            <optgroup key={o.id} label={`Overlap ID: ${o.id.slice(-6)}`}>
+              {img1 && <option value={formatImageUrl(img1)}>Subject A (Background)</option>}
+              {img2 && <option value={formatImageUrl(img2)}>Subject B (Foreground)</option>}
+            </optgroup>
+          );
+        })}
+      </select>
+
+      <div className="relative flex items-center py-2 mb-2">
+         <div className="flex-grow border-t border-slate-800"></div>
+         <span className="flex-shrink-0 mx-4 text-xs text-slate-500 font-bold">OR UPLOAD</span>
+         <div className="flex-grow border-t border-slate-800"></div>
+      </div>
+
+      <input type="file" id={`upload-${label}`} className="hidden" accept="image/*" onChange={(e) => { 
+        if(e.target.files[0]) {
+          setFile(e.target.files[0]); 
+          setPreview(URL.createObjectURL(e.target.files[0])); 
+        }
+      }} />
+      <label htmlFor={`upload-${label}`} className="cursor-pointer flex flex-col items-center border-2 border-dashed border-slate-700 rounded-xl p-4 hover:border-amber-500/50 transition flex-grow justify-center">
+        {previewState ? <img src={previewState} className="h-40 object-contain rounded-lg" /> : <Upload className="w-8 h-8 text-amber-500 mb-2" />}
+      </label>
+    </div>
+  );
+
+
+  // ================= MAIN RENDER =================
 
   if (mode === 'menu') {
     return (
@@ -113,18 +225,55 @@ export default function SeparationPage() {
           <h1 className="text-3xl font-bold text-white tracking-tight">Fingerprint Hub</h1>
           <p className="text-slate-400 mt-2">Select an operational workflow to begin.</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <button onClick={() => setMode('separate')} className="group bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-8 rounded-2xl text-left transition-all cursor-pointer">
-            <div className="w-14 h-14 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-400 mb-6"><SplitSquareHorizontal className="w-7 h-7" /></div>
-            <h3 className="text-xl font-bold text-white mb-2">Overlap Fingerprint Processing</h3>
-            <p className="text-slate-400 text-sm">Upload a latent overlap, extract individual ridges, and verify against the database.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <button onClick={() => setMode('separate')} className="group bg-slate-900 border border-slate-800 hover:border-indigo-500/50 p-6 rounded-2xl text-left transition-all cursor-pointer">
+            <div className="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-400 mb-4"><SplitSquareHorizontal className="w-6 h-6" /></div>
+            <h3 className="text-lg font-bold text-white mb-2">Overlap Pipeline</h3>
+            <p className="text-slate-400 text-xs">Separate an overlapping latent print into two distinct images.</p>
           </button>
-          <button onClick={() => setMode('match')} className="group bg-slate-900 border border-slate-800 hover:border-emerald-500/50 p-8 rounded-2xl text-left transition-all cursor-pointer">
-            <div className="w-14 h-14 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-400 mb-6"><Database className="w-7 h-7" /></div>
-            <h3 className="text-xl font-bold text-white mb-2">Direct Fingerprint Matching</h3>
-            <p className="text-slate-400 text-sm">Upload a single, clean fingerprint image to search the database directly.</p>
+          
+          <button onClick={() => setMode('match')} className="group bg-slate-900 border border-slate-800 hover:border-emerald-500/50 p-6 rounded-2xl text-left transition-all cursor-pointer">
+            <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-400 mb-4"><Database className="w-6 h-6" /></div>
+            <h3 className="text-lg font-bold text-white mb-2">Database Search</h3>
+            <p className="text-slate-400 text-xs">Search the entire Target Database using a single known print.</p>
+          </button>
+
+          <button onClick={() => setMode('compare')} className="group bg-slate-900 border border-slate-800 hover:border-amber-500/50 p-6 rounded-2xl text-left transition-all cursor-pointer">
+            <div className="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-400 mb-4"><Scale className="w-6 h-6" /></div>
+            <h3 className="text-lg font-bold text-white mb-2">True 1-to-1 Match</h3>
+            <p className="text-slate-400 text-xs">Upload or select two prints side-by-side to directly compare them.</p>
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (mode === 'compare') {
+    return (
+      <div className="p-8 max-w-5xl mx-auto space-y-8 animate-in slide-in-from-right">
+        <div className="flex items-center gap-4">
+          <button onClick={resetToMenu} className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-400 cursor-pointer"><ArrowLeft className="w-5 h-5" /></button>
+          <div><h1 className="text-3xl font-bold text-white">Side-by-Side Comparison</h1></div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-6">
+          {renderSelectionBox("Print A (Probe)", compFile1, compPreview1, setCompFile1, setCompPreview1)}
+          {renderSelectionBox("Print B (Target)", compFile2, compPreview2, setCompFile2, setCompPreview2)}
+        </div>
+
+        <button onClick={handleCompare} disabled={!compFile1 || !compFile2 || isComparing} className="w-full py-4 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-800 text-white rounded-xl font-bold transition flex items-center justify-center gap-2 cursor-pointer">
+          {isComparing ? <Search className="w-5 h-5 animate-spin" /> : <Scale className="w-5 h-5" />}
+          Run Minutiae Comparison
+        </button>
+
+        {compareResult && (
+          <div className={`p-8 rounded-2xl border text-center ${compareResult.matched ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-rose-950/30 border-rose-500/30'}`}>
+            <h4 className="text-2xl font-bold text-white mb-2">{compareResult.matched ? 'Match Confirmed' : 'Mismatch'}</h4>
+            <p className={compareResult.matched ? "text-emerald-400" : "text-rose-400"}>
+              Engine Confidence Score: {compareResult.score.toFixed(2)}
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -161,7 +310,6 @@ export default function SeparationPage() {
 
         {stage === 'completed' && (
           <div className="grid grid-cols-2 gap-8">
-             {/* Subject A Box */}
              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 flex flex-col">
                <span className="text-lg font-bold text-white mb-4">Subject A (Background)</span>
                <img src={formatImageUrl(separatedPrints.printA)} className="h-48 w-full object-contain rounded-lg bg-slate-950 mb-6" />
@@ -177,7 +325,6 @@ export default function SeparationPage() {
                )}
              </div>
 
-             {/* Subject B Box */}
              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 flex flex-col">
                <span className="text-lg font-bold text-white mb-4">Subject B (Foreground)</span>
                <img src={formatImageUrl(separatedPrints.printB)} className="h-48 w-full object-contain rounded-lg bg-slate-950 mb-6" />
@@ -203,23 +350,15 @@ export default function SeparationPage() {
       <div className="p-8 max-w-4xl mx-auto space-y-8 animate-in slide-in-from-right">
         <div className="flex items-center gap-4">
           <button onClick={resetToMenu} className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-400 cursor-pointer"><ArrowLeft className="w-5 h-5" /></button>
-          <div><h1 className="text-3xl font-bold text-white">Direct Verification</h1></div>
+          <div><h1 className="text-3xl font-bold text-white">Database Verification</h1></div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl">
-          <div className="border-2 border-dashed border-slate-700 rounded-xl p-12 text-center hover:border-emerald-500/50 transition mb-6">
-            <input type="file" id="direct-up" className="hidden" accept="image/*" onChange={(e) => { setDirectFile(e.target.files[0]); setDirectPreview(URL.createObjectURL(e.target.files[0])); setDirectMatchResult(null); }} />
-            <label htmlFor="direct-up" className="cursor-pointer flex flex-col items-center">
-              {directPreview ? <img src={directPreview} className="h-64 object-contain rounded-lg mb-4" /> : <Upload className="w-12 h-12 text-emerald-500 mb-4" />}
-              <span className="text-slate-300 font-medium">Select Fingerprint Image to Match</span>
-            </label>
-          </div>
+        {renderSelectionBox("Select Fingerprint Image to Match", directFile, directPreview, setDirectFile, setDirectPreview)}
 
-          <button onClick={handleDirectMatch} disabled={!directFile || isDirectMatching} className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-800 text-white rounded-xl font-bold transition flex items-center justify-center gap-2 cursor-pointer">
-            {isDirectMatching ? <Search className="w-5 h-5 animate-spin" /> : <Fingerprint className="w-5 h-5" />}
-            Run Database Verification
-          </button>
-        </div>
+        <button onClick={handleDirectMatch} disabled={!directFile || isDirectMatching} className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-800 text-white rounded-xl font-bold transition flex items-center justify-center gap-2 cursor-pointer">
+          {isDirectMatching ? <Search className="w-5 h-5 animate-spin" /> : <Fingerprint className="w-5 h-5" />}
+          Run Database Verification
+        </button>
 
         {directMatchResult && (
           <div className={`p-8 rounded-2xl border text-center ${directMatchResult.matched ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-rose-950/30 border-rose-500/30'}`}>

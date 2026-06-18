@@ -4,8 +4,6 @@ import { LayoutDashboard, Sliders, CheckSquare, ShieldAlert } from 'lucide-react
 export default function DashboardLayout({ children, activeTab, setActiveTab }) {
  const navItems = [
     { id: 'separation', label: 'Fingerprint Pipeline', icon: Sliders },
-    { id: 'matching', label: '1-to-1 Verification', icon: CheckSquare }, // Changed label
-    { id: 'admin', label: 'Admin Logs', icon: ShieldAlert },
   ];
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex">

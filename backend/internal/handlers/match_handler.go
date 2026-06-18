@@ -1,15 +1,16 @@
 package handlers
 
 import (
+	"io"
 	"net/http"
 	"strconv"
-	"io"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/kirantiwari/fingcheck/internal/models"
 	"github.com/kirantiwari/fingcheck/internal/services"
+	"github.com/kirantiwari/fingcheck/pkg/biometric" 
 	"github.com/kirantiwari/fingcheck/pkg/response"
 )
 
@@ -226,6 +227,37 @@ func (h *MatchHandler) DirectMatch(c *gin.Context) {
 
 	response.Success(c, http.StatusOK, "Direct match executed successfully", gin.H{
 		"results": results,
+	})
+}
+
+// CompareTwoFingerprints handles the direct A vs B comparison.
+func (h *MatchHandler) CompareTwoFingerprints(c *gin.Context) {
+	file1, err1 := c.FormFile("image1")
+	file2, err2 := c.FormFile("image2")
+	
+	if err1 != nil || err2 != nil {
+		response.Error(c, http.StatusBadRequest, "Both image1 and image2 are required", nil)
+		return
+	}
+
+	f1, _ := file1.Open()
+	defer f1.Close()
+	bytes1, _ := io.ReadAll(f1)
+
+	f2, _ := file2.Open()
+	defer f2.Close()
+	bytes2, _ := io.ReadAll(f2)
+
+	// Call the biometric package directly for a fast, memory-only comparison
+	score, isMatch, err := biometric.CompareTwoPrints(bytes1, bytes2)
+	if err != nil {
+		response.InternalError(c, "Failed to analyze fingerprints")
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Comparison complete", gin.H{
+		"is_match": isMatch,
+		"score":    score,
 	})
 }
 

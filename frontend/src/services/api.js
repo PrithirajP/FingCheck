@@ -59,6 +59,16 @@ export const matchService = {
     });
     return response.data;
   },
+
+  compareTwo: async (file1, file2) => {
+    const formData = new FormData();
+    formData.append('image1', file1);
+    formData.append('image2', file2);
+    const response = await api.post('/match/compare', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
   
   // Gets history of user matches
   getMyMatches: async () => {

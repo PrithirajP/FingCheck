@@ -1,14 +1,15 @@
-import { UserButton } from '@clerk/clerk-react';
-import { Activity, Users, Database, Layers, ShieldAlert } from 'lucide-react';
+import { UserButton } from "@clerk/clerk-react";
+import { Activity, Users, Database, Layers, ShieldAlert } from "lucide-react";
 
 export default function AdminLayout({ children, activeTab, setActiveTab }) {
   // The 5 core views defined in the specification
   const navItems = [
-    { id: 'overview', label: 'Overview', icon: Activity },
-    { id: 'users', label: 'User Management', icon: Users },
-    { id: 'targets', label: 'Target Database', icon: Database },
-    { id: 'analysis', label: 'Overlap Analysis', icon: Layers },
-    { id: 'audit', label: 'Audit Logs', icon: ShieldAlert },
+    { id: "overview", label: "Overview", icon: Activity },
+    { id: "users", label: "User Management", icon: Users },
+    { id: "targets", label: "Target Database", icon: Database },
+    { id: "analysis", label: "Overlap Analysis", icon: Layers },
+    { id: "admin", label: "Admin Logs", icon: ShieldAlert },
+    { id: "audit", label: "Audit Logs", icon: ShieldAlert },
   ];
 
   return (
@@ -21,7 +22,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab }) {
             ADMIN COMMAND
           </span>
         </div>
-        
+
         <nav className="space-y-2 flex-1">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -31,9 +32,9 @@ export default function AdminLayout({ children, activeTab, setActiveTab }) {
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all ${
-                  isActive 
-                    ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' 
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-transparent'
+                  isActive
+                    ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-transparent"
                 }`}
               >
                 <Icon className="w-5 h-5" />
@@ -48,9 +49,14 @@ export default function AdminLayout({ children, activeTab, setActiveTab }) {
       <div className="flex-1 flex flex-col min-w-0 bg-[#0a0f1c]">
         <header className="h-16 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between px-8">
           <div className="text-sm font-mono text-slate-500">
-            Secure Session Active // {new Date().toISOString().split('T')[0]}
+            Secure Session Active // {new Date().toISOString().split("T")[0]}
           </div>
-          <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: "w-9 h-9 border-2 border-amber-500/50" } }} />
+          <UserButton
+            afterSignOutUrl="/"
+            appearance={{
+              elements: { avatarBox: "w-9 h-9 border-2 border-amber-500/50" },
+            }}
+          />
         </header>
         <main className="flex-1 p-8 max-w-7xl w-full mx-auto overflow-y-auto">
           {children}

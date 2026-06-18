@@ -4,7 +4,6 @@ import AdminLogin from './pages/Auth/AdminLogin';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
 import SeparationPage from './pages/SeparationPage';
-import MatchingPage from './pages/MatchingPage';
 import LandingPage from './pages/LandingPage';
 import AdminLayout from './layouts/AdminLayout';
 import UserManagement from './pages/Admin/UserManagement';
@@ -26,7 +25,6 @@ export default function App() {
           <ProtectedRoute allowedRole="user">
             <DashboardLayout activeTab={activeTab} setActiveTab={setActiveTab}>
               {activeTab === 'separation' && <SeparationPage />}
-              {activeTab === 'matching' && <MatchingPage />}
             </DashboardLayout>
           </ProtectedRoute>
         } />

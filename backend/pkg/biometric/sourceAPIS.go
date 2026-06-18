@@ -84,3 +84,41 @@ func ProcessBiometricMatch(ctx context.Context, cleanedImageBytes []byte, databa
 
 	return result, nil
 }
+
+// CompareTwoPrints takes two raw images, extracts their minutiae, and compares them instantly.
+func CompareTwoPrints(img1Bytes []byte, img2Bytes []byte) (float64, bool, error) {
+	// Process Image 1 (Probe)
+	reader1 := bytes.NewReader(img1Bytes)
+	decodedImg1, _, err := image.Decode(reader1)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to decode image 1: %w", err)
+	}
+	afisImg1, _ := sourceafis.NewFromImage(decodedImg1, sourceafis.WithResolution(500))
+	creator1 := sourceafis.NewTemplateCreator(nil)
+	template1, err := creator1.Template(afisImg1)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to extract template 1: %w", err)
+	}
+
+	// Process Image 2 (Candidate)
+	reader2 := bytes.NewReader(img2Bytes)
+	decodedImg2, _, err := image.Decode(reader2)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to decode image 2: %w", err)
+	}
+	afisImg2, _ := sourceafis.NewFromImage(decodedImg2, sourceafis.WithResolution(500))
+	creator2 := sourceafis.NewTemplateCreator(nil)
+	template2, err := creator2.Template(afisImg2)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to extract template 2: %w", err)
+	}
+
+	// Run the Match
+	matcher, err := sourceafis.NewMatcher(nil, template1)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to initialize matcher: %w", err)
+	}
+
+	score := matcher.Match(context.Background(), template2)
+	return score, score >= MatchThreshold, nil
+}
