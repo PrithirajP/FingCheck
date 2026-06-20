@@ -74,15 +74,23 @@ export default function SeparationPage() {
   const handleSeparate = async () => {
     if (!file) return;
     setIsProcessing(true); setStage('processing');
+    
     try {
-      const token = await getToken(); setAuthToken(token);
+      const token = await getToken(); 
+      setAuthToken(token);
+      
+      // 1. Upload the file
       const uploadRes = await overlapService.upload(file);
-      const newOverlapId = uploadRes.data.id;
+      
+      // Safely extract the ID depending on the exact API response wrapper
+      const newOverlapId = uploadRes.data?.id || uploadRes.data?.data?.id || uploadRes.id;
 
+      // 2. Poll for specific status updates every 2 seconds
       pollingRef.current = setInterval(async () => {
-        const checkRes = await overlapService.getMyOverlaps();
-        const currentOverlap = checkRes.data.find(o => o.id === newOverlapId);
-        if (currentOverlap) {
+        try {
+          const statusRes = await overlapService.getOverlapStatus(newOverlapId);
+          const currentOverlap = statusRes.data || statusRes;
+
           if (currentOverlap.processing_status === 'completed') {
             clearInterval(pollingRef.current);
             setSeparatedPrints({
@@ -90,16 +98,31 @@ export default function SeparationPage() {
               printA: currentOverlap.separated_image_1_url || currentOverlap.SeparatedImage1URL,
               printB: currentOverlap.separated_image_2_url || currentOverlap.SeparatedImage2URL
             });
-            setIsProcessing(false); setStage('completed');
+            setIsProcessing(false); 
+            setStage('completed');
+            
           } else if (currentOverlap.processing_status === 'failed') {
             clearInterval(pollingRef.current);
             alert("Processing failed: " + currentOverlap.processing_log);
-            setIsProcessing(false); setStage('upload');
+            setIsProcessing(false); 
+            setStage('upload');
           }
+          // If status is 'pending' or 'processing', it will just loop again
+          
+        } catch (pollErr) {
+          console.error("Polling error:", pollErr);
+          clearInterval(pollingRef.current);
+          alert("Error checking separation status.");
+          setIsProcessing(false); 
+          setStage('upload');
         }
-      }, 3000);
+      }, 2000);
+
     } catch (error) {
-      alert("Upload failed."); setIsProcessing(false); setStage('upload');
+      console.error("Upload failed", error);
+      alert("Upload failed."); 
+      setIsProcessing(false); 
+      setStage('upload');
     }
   };
 

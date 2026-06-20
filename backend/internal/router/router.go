@@ -30,7 +30,7 @@ func SetupRouter(h *Handlers, cfg *config.Config) *gin.Engine {
 		// Public webhook
 		v1.POST("/webhooks/clerk", h.AuthHandler.HandleClerkWebhook)
 
-		// Authenticated routes
+		// Authenticated routes (Accessible by BOTH standard users and admins)
 		auth := v1.Group("")
 		auth.Use(middleware.AuthMiddleware(h.UserRepo))
 		{
@@ -39,12 +39,18 @@ func SetupRouter(h *Handlers, cfg *config.Config) *gin.Engine {
 			auth.GET("/overlaps/my", h.OverlapHandler.GetMyOverlaps)
 			auth.GET("/match/:id", h.MatchHandler.GetMatchResult)
 
-			
+			// --- THE FIX: PIPELINE ROUTES FOR STANDARD USERS ---
+			// Normal users need to be able to upload overlapping prints
+			auth.POST("/overlaps", h.OverlapHandler.UploadOverlap)
+			// Normal users need to poll this endpoint to check if the Python separation is finished
+			auth.GET("/overlaps/:id", h.OverlapHandler.GetOverlapByID)
+
+			// The 3 Matching Engine Routes
 			auth.POST("/match", h.MatchHandler.MatchFingerprint)
 			auth.POST("/match/direct", h.MatchHandler.DirectMatch)
 			auth.POST("/match/compare", h.MatchHandler.CompareTwoFingerprints)
 
-			// Admin routes
+			// Admin routes (Strictly limited to users with the 'admin' role)
 			admin := auth.Group("/admin")
 			admin.Use(middleware.RequireAdmin())
 			{
@@ -60,11 +66,13 @@ func SetupRouter(h *Handlers, cfg *config.Config) *gin.Engine {
 				admin.PUT("/fingerprints/:id", h.FPHandler.UpdateFingerprint)
 				admin.DELETE("/fingerprints/:id", h.FPHandler.DeleteFingerprint)
 
-				admin.POST("/overlaps", h.OverlapHandler.UploadOverlap)
+				// Admins retain the ability to view ALL overlaps across the entire system
 				admin.GET("/overlaps", h.OverlapHandler.GetAllOverlaps)
-				admin.GET("/overlaps/:id", h.OverlapHandler.GetOverlapByID)
 
 				admin.GET("/matches", h.MatchHandler.GetAllMatches)
+				
+				// Security Audit Logs endpoint
+				admin.GET("/audit-logs", h.MatchHandler.GetAuditLogs)
 			}
 		}
 	}

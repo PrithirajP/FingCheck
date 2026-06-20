@@ -4,6 +4,7 @@ import AdminLogin from './pages/Auth/AdminLogin';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
 import SeparationPage from './pages/SeparationPage';
+import AuditLogs from './pages/Admin/AuditLogs';
 import LandingPage from './pages/LandingPage';
 import AdminLayout from './layouts/AdminLayout';
 import UserManagement from './pages/Admin/UserManagement';
@@ -49,6 +50,8 @@ export default function App() {
            {activeTab === 'audit' && (
              <div><h2 className="text-2xl font-bold text-white mb-4">Security Audit Logs</h2></div>
            )}
+
+           {activeTab === 'audit' && <AuditLogs />}
 
          </AdminLayout>
        </ProtectedRoute>

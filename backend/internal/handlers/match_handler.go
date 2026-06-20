@@ -10,7 +10,7 @@ import (
 
 	"github.com/kirantiwari/fingcheck/internal/models"
 	"github.com/kirantiwari/fingcheck/internal/services"
-	"github.com/kirantiwari/fingcheck/pkg/biometric" 
+	"github.com/kirantiwari/fingcheck/pkg/biometric"
 	"github.com/kirantiwari/fingcheck/pkg/response"
 )
 
@@ -234,7 +234,7 @@ func (h *MatchHandler) DirectMatch(c *gin.Context) {
 func (h *MatchHandler) CompareTwoFingerprints(c *gin.Context) {
 	file1, err1 := c.FormFile("image1")
 	file2, err2 := c.FormFile("image2")
-	
+
 	if err1 != nil || err2 != nil {
 		response.Error(c, http.StatusBadRequest, "Both image1 and image2 are required", nil)
 		return
@@ -261,3 +261,21 @@ func (h *MatchHandler) CompareTwoFingerprints(c *gin.Context) {
 	})
 }
 
+// GetAuditLogs fetches the system audit logs for the admin dashboard
+func (h *MatchHandler) GetAuditLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
+
+	logs, total, err := h.matchService.GetAllAuditLogs(c.Request.Context(), page, pageSize)
+	if err != nil {
+		response.InternalError(c, "Failed to retrieve audit logs")
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Audit logs retrieved successfully", gin.H{
+		"data":      logs,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
+}

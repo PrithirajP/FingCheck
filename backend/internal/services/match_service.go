@@ -22,6 +22,9 @@ type MatchService interface {
 	GetMatchesByUser(ctx context.Context, userID primitive.ObjectID, page, pageSize int) ([]models.MatchResult, int64, error)
 	GetAllMatches(ctx context.Context, page, pageSize int) ([]models.MatchResult, int64, error)
 	DirectMatch(ctx context.Context, imageBytes []byte, searcherID primitive.ObjectID) ([]models.MatchResult, error)
+	
+	// ADDED: The missing interface definition for Audit Logs
+	GetAllAuditLogs(ctx context.Context, page, pageSize int) ([]models.AuditLog, int64, error)
 }
 
 type matchService struct {
@@ -213,4 +216,19 @@ func (s *matchService) DirectMatch(ctx context.Context, imageBytes []byte, searc
 	})
 
 	return results, nil
+}
+
+// ADDED: The missing function implementation
+func (s *matchService) GetAllAuditLogs(ctx context.Context, page, pageSize int) ([]models.AuditLog, int64, error) {
+	logs, err := s.auditRepo.GetAll(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	
+	// Reverse the logs so the newest ones are at the top of your dashboard
+	for i, j := 0, len(logs)-1; i < j; i, j = i+1, j-1 {
+		logs[i], logs[j] = logs[j], logs[i]
+	}
+
+	return logs, int64(len(logs)), nil
 }
