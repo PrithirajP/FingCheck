@@ -54,6 +54,8 @@ func SetupRouter(h *Handlers, cfg *config.Config) *gin.Engine {
 			admin := auth.Group("/admin")
 			admin.Use(middleware.RequireAdmin())
 			{
+                admin.GET("/stats", h.AdminHandler.GetSystemStats)
+
 				admin.GET("/users", h.UserHandler.GetAllUsers)
 				admin.GET("/users/:id", h.UserHandler.GetUserByID)
 				admin.PUT("/users/:id", h.UserHandler.UpdateUser)

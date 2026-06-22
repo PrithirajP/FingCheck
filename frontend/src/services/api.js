@@ -82,6 +82,11 @@ export const matchService = {
 
 // --- ADMIN SERVICES ---
 export const adminService = {
+
+  getSystemStats: async () => {
+    const response = await api.get('/admin/stats');
+    return response.data;
+  },
   getAllUsers: async (page = 1, pageSize = 10) => {
     const response = await api.get(
       `/admin/users?page=${page}&page_size=${pageSize}`,

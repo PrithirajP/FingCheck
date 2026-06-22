@@ -1,15 +1,22 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useState } from 'react';
+
+// Pages & Layouts
 import UserLogin from './pages/Auth/UserLogin';
 import AdminLogin from './pages/Auth/AdminLogin';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
-import SeparationPage from './pages/SeparationPage';
-import AuditLogs from './pages/Admin/AuditLogs';
-import LandingPage from './pages/LandingPage';
 import AdminLayout from './layouts/AdminLayout';
+import LandingPage from './pages/LandingPage';
+
+// User Views
+import SeparationPage from './pages/SeparationPage';
+
+// Admin Views
+import SystemOverview from './pages/Admin/SystemOverview';
 import UserManagement from './pages/Admin/UserManagement';
 import TargetDatabase from './pages/Admin/TargetDatabase';
-import { useState } from 'react';
+import AuditLogs from './pages/Admin/AuditLogs';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('separation');
@@ -30,32 +37,29 @@ export default function App() {
           </ProtectedRoute>
         } />
 
-       {/* 3. Secure Administrative Workspace Route */}
-     <Route path="/admin/dashboard" element={
-       <ProtectedRoute allowedRole="admin">
-         <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+        {/* Secure Administrative Workspace Route */}
+        <Route path="/admin/dashboard" element={
+          <ProtectedRoute allowedRole="admin">
+            <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+              
+              {/* Integrated the new Overview Component */}
+              {activeTab === 'overview' && <SystemOverview />}
 
-           {activeTab === 'overview' && (
-             <div><h2 className="text-2xl font-bold text-white mb-4">System Overview</h2></div>
-           )}
+              {activeTab === 'users' && <UserManagement />}
 
-           {activeTab === 'users' && <UserManagement />}
+              {activeTab === 'targets' && <TargetDatabase />}
 
-           {activeTab === 'targets' && <TargetDatabase />}
+              {/* Placeholder for future Overlap Analysis view */}
+              {activeTab === 'analysis' && (
+                <div><h2 className="text-2xl font-bold text-white mb-4">Overlap Analysis (Admin View)</h2></div>
+              )}
 
-           {activeTab === 'analysis' && (
-             <div><h2 className="text-2xl font-bold text-white mb-4">Overlap Analysis (Admin View)</h2></div>
-           )}
+              {/* Cleaned up the duplicate audit entry */}
+              {activeTab === 'audit' && <AuditLogs />}
 
-           {activeTab === 'audit' && (
-             <div><h2 className="text-2xl font-bold text-white mb-4">Security Audit Logs</h2></div>
-           )}
-
-           {activeTab === 'audit' && <AuditLogs />}
-
-         </AdminLayout>
-       </ProtectedRoute>
-     } />
+            </AdminLayout>
+          </ProtectedRoute>
+        } />
 
         <Route path="/" element={<LandingPage />} />
 
