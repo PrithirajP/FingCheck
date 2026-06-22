@@ -16,6 +16,7 @@ type Handlers struct {
 	OverlapHandler *handlers.OverlapHandler
 	MatchHandler   *handlers.MatchHandler
 	UserRepo       repository.UserRepository
+	AdminHandler   *handlers.AdminHandler
 }
 
 // SetupRouter initializes Gin engine, middleware, and registers routes.

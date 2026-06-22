@@ -1,34 +1,48 @@
 package handlers
 
 import (
+	"context"
+	"log" // <--- Added log package
+	"net/http"
+
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
-// Define the struct so your router can recognize it
 type AdminHandler struct {
-	db *gorm.DB
+	db *mongo.Database
 }
 
-// Constructor to initialize the handler with the database
-func NewAdminHandler(db *gorm.DB) *AdminHandler {
+func NewAdminHandler(db *mongo.Database) *AdminHandler {
 	return &AdminHandler{db: db}
 }
 
-// The stats function for the frontend dashboard
 func (h *AdminHandler) GetSystemStats(c *gin.Context) {
-	var userCount, targetCount, overlapCount int64
+	ctx := context.Background()
 
-	// Count total users
-	h.db.Table("users").Count(&userCount)
-	
-	// Count target fingerprints
-	h.db.Table("fingerprints").Count(&targetCount) 
-	
-	// Count total processed overlaps
-	h.db.Table("overlaps").Count(&overlapCount)
+	// 1. Users
+	userCount, err1 := h.db.Collection("users").CountDocuments(ctx, bson.M{})
+	if err1 != nil {
+		log.Printf("MongoDB Error counting users: %v", err1)
+		userCount = 0
+	}
 
-	c.JSON(200, gin.H{
+	// 2. Targets
+	targetCount, err2 := h.db.Collection("fingerprints").CountDocuments(ctx, bson.M{})
+	if err2 != nil {
+		log.Printf("MongoDB Error counting fingerprints: %v", err2)
+		targetCount = 0
+	}
+
+	// 3. Overlaps
+	overlapCount, err3 := h.db.Collection("overlaps").CountDocuments(ctx, bson.M{})
+	if err3 != nil {
+		log.Printf("MongoDB Error counting overlaps: %v", err3)
+		overlapCount = 0
+	}
+
+	c.JSON(http.StatusOK, gin.H{
 		"users":    userCount,
 		"targets":  targetCount,
 		"overlaps": overlapCount,
