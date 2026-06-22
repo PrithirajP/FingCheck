@@ -27,9 +27,7 @@ export const overlapService = {
     const formData = new FormData();
     formData.append("image", file);
 
-    // Using the current endpoint from your router.go.
-    // If you move this out of the admin group in Go, remove the '/admin' prefix here.
-    const response = await api.post("/admin/overlaps", formData, {
+    const response = await api.post("/overlaps", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     return response.data;
@@ -40,11 +38,16 @@ export const overlapService = {
     const response = await api.get("/overlaps/my");
     return response.data;
   },
+
+  // FIX: Moved getOverlapStatus here so SeparationPage.jsx can find it
+  getOverlapStatus: async (id) => {
+    const response = await api.get(`/overlaps/${id}`);
+    return response.data;
+  },
 };
 
 // --- MATCHING SERVICES ---
 export const matchService = {
-  // Triggers the match against the database
   runMatch: async (overlapId) => {
     const response = await api.post("/match", {
       overlap_fingerprint_id: overlapId,
@@ -71,7 +74,6 @@ export const matchService = {
     return response.data;
   },
 
-  // Gets history of user matches
   getMyMatches: async () => {
     const response = await api.get("/me/matches");
     return response.data;
@@ -80,7 +82,6 @@ export const matchService = {
 
 // --- ADMIN SERVICES ---
 export const adminService = {
-  // Flow A: User Management
   getAllUsers: async (page = 1, pageSize = 10) => {
     const response = await api.get(
       `/admin/users?page=${page}&page_size=${pageSize}`,
@@ -96,7 +97,6 @@ export const adminService = {
     return response.data;
   },
 
-  // Flow B: Target Database
   uploadTargetPrint: async (file, label, deviceMeta = "") => {
     const formData = new FormData();
     formData.append("image", file);
@@ -109,7 +109,6 @@ export const adminService = {
     return response.data;
   },
 
-  // Flow C & D: Admin Overlap & Matching
   getAllOverlaps: async (page = 1, pageSize = 10) => {
     const response = await api.get(
       `/admin/overlaps?page=${page}&page_size=${pageSize}`,
@@ -133,10 +132,7 @@ export const adminService = {
     );
     return response.data;
   },
-  getOverlapStatus: async (id) => {
-    const response = await api.get(`/overlaps/${id}`);
-    return response.data;
-  },
+  // Removed getOverlapStatus from here as it is now in overlapService
 };
 
 export default api;

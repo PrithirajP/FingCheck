@@ -14,8 +14,11 @@ export default function AuditLogs() {
         const token = await getToken();
         setAuthToken(token);
         const res = await adminService.getAuditLogs();
-        // Assuming your backend returns { data: [...] } or just an array
-        setLogs(res.data || res || []);
+        
+        // THE FIX: Safely extract the array from the nested backend response
+        const extractedLogs = res?.data?.data || res?.data || [];
+        setLogs(extractedLogs);
+        
       } catch (err) {
         console.error("Failed to fetch audit logs:", err);
       } finally {
@@ -79,7 +82,8 @@ export default function AuditLogs() {
                       {new Date(log.created_at).toLocaleString()}
                     </td>
                     <td className="px-6 py-4 font-mono text-xs text-slate-500">
-                      {log.user_id.slice(-8)}...
+                      {/* Added optional chaining here to prevent crashes on system events with no user */}
+                      {log.user_id?.slice(-8) || 'SYSTEM'}...
                     </td>
                     <td className="px-6 py-4">
                       {getActionBadge(log.action)}
