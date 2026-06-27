@@ -58,6 +58,7 @@ python_microservice/*.pth
 python_microservice/*.pt
 python_microservice/*.onnx
 
+
 # Ignore raw fingerprint dataset images and API test outputs
 *.png
 *.jpg
@@ -68,3 +69,6 @@ API_TEST_RESULT.png
 
 # Jupyter Notebook checkpoints (if you move your backend.ipynb here)
 .ipynb_checkpoints/
+node_modules/
+.env/
+venv/
