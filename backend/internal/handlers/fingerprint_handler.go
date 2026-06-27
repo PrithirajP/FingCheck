@@ -163,3 +163,4 @@ func (h *FingerprintHandler) DeleteFingerprint(c *gin.Context) {
 
 	response.Success(c, http.StatusOK, "Fingerprint deleted successfully", nil)
 }
+

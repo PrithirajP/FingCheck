@@ -68,6 +68,9 @@ func main() {
 	fpHandler := handlers.NewFingerprintHandler(fpSvc, cfg.UploadDir)
 	overlapHandler := handlers.NewOverlapHandler(overlapSvc, cfg.UploadDir)
 	matchHandler := handlers.NewMatchHandler(matchSvc)
+	
+	// ---> ADDED: Initialize the new AdminHandler <---
+	adminHandler := handlers.NewAdminHandler(db)
 
 	// 8. Build the Handlers struct for the router
 	h := &router.Handlers{
@@ -76,6 +79,10 @@ func main() {
 		FPHandler:      fpHandler,
 		OverlapHandler: overlapHandler,
 		MatchHandler:   matchHandler,
+		
+		// ---> ADDED: Inject AdminHandler into the struct <---
+		AdminHandler:   adminHandler, 
+		
 		UserRepo:       userRepo,
 	}
 

@@ -10,10 +10,25 @@ import (
 	_ "image/png"
 
 	"github.com/jtejido/sourceafis"
+	"github.com/jtejido/sourceafis/config"
+	"github.com/jtejido/sourceafis/extractor/logger"
 	"github.com/kirantiwari/fingcheck/internal/models"
 	"github.com/kirantiwari/fingcheck/internal/repository"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+// This runs once automatically when the server starts to boot up the algorithm
+func init() {
+	config.LoadDefaultConfig()
+}
+// A dummy logger that safely absorbs and discards SourceAFIS debug logs
+// This prevents the nil pointer panic when the algorithm tries to log its steps.
+type noopLogger struct{
+	logger.TransparencyLogger
+}
+
+func (n *noopLogger) Log(key string, data interface{}) error { return nil }
+func (n *noopLogger) Accepts(key string) bool { return false }
 
 type FingerprintService interface {
 	CreateFingerprint(ctx context.Context, fp *models.Fingerprint, imageBytes []byte, adminID primitive.ObjectID) (*models.Fingerprint, error)
@@ -48,7 +63,8 @@ func (s *fingerprintService) CreateFingerprint(ctx context.Context, fp *models.F
 		return nil, fmt.Errorf("failed to initialize SourceAFIS image: %w", err)
 	}
 
-	creator := sourceafis.NewTemplateCreator(nil)
+	// THE FIX: Give the algorithm our safe dummy logger instead of nil
+	creator := sourceafis.NewTemplateCreator(&noopLogger{})
 	template, err := creator.Template(img)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract fingerprint template: %w", err)

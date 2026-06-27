@@ -15,6 +15,7 @@ type AuditRepository interface {
 	Create(ctx context.Context, audit *models.AuditLog) error
 	GetByEntity(ctx context.Context, entityType string, entityID primitive.ObjectID) ([]models.AuditLog, error)
 	GetByUser(ctx context.Context, userID primitive.ObjectID, page, pageSize int) ([]models.AuditLog, int64, error)
+	GetAll(ctx context.Context) ([]models.AuditLog, error)
 }
 
 type auditRepo struct {
@@ -78,4 +79,20 @@ func (r *auditRepo) GetByUser(ctx context.Context, userID primitive.ObjectID, pa
 	}
 
 	return audits, total, nil
+}
+// GetAll retrieves all audit logs from the database
+func (r *auditRepo) GetAll(ctx context.Context) ([]models.AuditLog, error) {
+	// Empty bson.M{} means "find everything"
+	cursor, err := r.collection.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var logs []models.AuditLog
+	if err = cursor.All(ctx, &logs); err != nil {
+		return nil, err
+	}
+
+	return logs, nil
 }

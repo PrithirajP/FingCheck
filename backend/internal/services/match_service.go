@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/jtejido/sourceafis/templates"
 	"github.com/kirantiwari/fingcheck/internal/models"
@@ -20,6 +21,10 @@ type MatchService interface {
 	GetMatchesByOverlapID(ctx context.Context, overlapID primitive.ObjectID) ([]models.MatchResult, error)
 	GetMatchesByUser(ctx context.Context, userID primitive.ObjectID, page, pageSize int) ([]models.MatchResult, int64, error)
 	GetAllMatches(ctx context.Context, page, pageSize int) ([]models.MatchResult, int64, error)
+	DirectMatch(ctx context.Context, imageBytes []byte, searcherID primitive.ObjectID) ([]models.MatchResult, error)
+	
+	// ADDED: The missing interface definition for Audit Logs
+	GetAllAuditLogs(ctx context.Context, page, pageSize int) ([]models.AuditLog, int64, error)
 }
 
 type matchService struct {
@@ -155,4 +160,75 @@ func (s *matchService) GetMatchesByUser(ctx context.Context, userID primitive.Ob
 
 func (s *matchService) GetAllMatches(ctx context.Context, page, pageSize int) ([]models.MatchResult, int64, error) {
 	return s.matchRepo.GetAll(ctx, page, pageSize)
+}
+
+func (s *matchService) DirectMatch(ctx context.Context, imageBytes []byte, searcherID primitive.ObjectID) ([]models.MatchResult, error) {
+	dbRecords, err := s.fpRepo.GetAllActive(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch target database: %w", err)
+	}
+
+	var biometricDB []biometric.UserRecord
+	for _, record := range dbRecords {
+		if record.TemplateData == "" {
+			continue
+		}
+		var t templates.SearchTemplate
+		if err := json.Unmarshal([]byte(record.TemplateData), &t); err == nil {
+			biometricDB = append(biometricDB, biometric.UserRecord{
+				UserID:   record.ID.Hex(),
+				Template: &t,
+			})
+		}
+	}
+
+	res, err := biometric.ProcessBiometricMatch(ctx, imageBytes, biometricDB)
+	if err != nil {
+		return nil, fmt.Errorf("biometric engine error: %w", err)
+	}
+
+	var results []models.MatchResult
+	matchResult := models.MatchResult{
+		ID:              primitive.NewObjectID(),
+		SearchedBy:      searcherID,
+		ComponentIndex:  0,
+		ConfidenceScore: 0,
+		IsMatch:         false,
+		MatchDetails:    map[string]any{"engine": "SourceAFIS", "type": "direct_upload"},
+		CreatedAt:       time.Now(),
+	}
+
+	if res != nil && res.IsMatch {
+		matchedFPID, _ := primitive.ObjectIDFromHex(res.UserID)
+		matchResult.MatchedFingerprintID = &matchedFPID
+		matchResult.ConfidenceScore = res.Score
+		matchResult.IsMatch = true
+	}
+
+	_ = s.matchRepo.Create(ctx, &matchResult)
+	results = append(results, matchResult)
+
+	_ = s.auditRepo.Create(ctx, &models.AuditLog{
+		UserID:     searcherID,
+		Action:     "match.direct_executed",
+		EntityType: "direct_fingerprint",
+		NewValue:   fmt.Sprintf("is_match=%v, score=%f", matchResult.IsMatch, matchResult.ConfidenceScore),
+	})
+
+	return results, nil
+}
+
+// ADDED: The missing function implementation
+func (s *matchService) GetAllAuditLogs(ctx context.Context, page, pageSize int) ([]models.AuditLog, int64, error) {
+	logs, err := s.auditRepo.GetAll(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	
+	// Reverse the logs so the newest ones are at the top of your dashboard
+	for i, j := 0, len(logs)-1; i < j; i, j = i+1, j-1 {
+		logs[i], logs[j] = logs[j], logs[i]
+	}
+
+	return logs, int64(len(logs)), nil
 }

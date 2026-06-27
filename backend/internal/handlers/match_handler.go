@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"io"
 	"net/http"
 	"strconv"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/kirantiwari/fingcheck/internal/models"
 	"github.com/kirantiwari/fingcheck/internal/services"
+	"github.com/kirantiwari/fingcheck/pkg/biometric"
 	"github.com/kirantiwari/fingcheck/pkg/response"
 )
 
@@ -188,6 +190,90 @@ func (h *MatchHandler) GetAllMatches(c *gin.Context) {
 
 	response.Success(c, http.StatusOK, "Matches list retrieved successfully", gin.H{
 		"results":   results,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
+}
+
+// DirectMatch handles uploading a raw image and searching the DB directly.
+func (h *MatchHandler) DirectMatch(c *gin.Context) {
+	file, err := c.FormFile("image")
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "Image file is required", err.Error())
+		return
+	}
+
+	fileContent, err := file.Open()
+	if err != nil {
+		response.InternalError(c, "Failed to open image file")
+		return
+	}
+	defer fileContent.Close()
+
+	imageBytes, err := io.ReadAll(fileContent)
+	if err != nil {
+		response.InternalError(c, "Failed to read image file")
+		return
+	}
+
+	searcherID := c.MustGet("userID").(primitive.ObjectID)
+
+	results, err := h.matchService.DirectMatch(c.Request.Context(), imageBytes, searcherID)
+	if err != nil {
+		response.InternalError(c, "Failed to execute direct match")
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Direct match executed successfully", gin.H{
+		"results": results,
+	})
+}
+
+// CompareTwoFingerprints handles the direct A vs B comparison.
+func (h *MatchHandler) CompareTwoFingerprints(c *gin.Context) {
+	file1, err1 := c.FormFile("image1")
+	file2, err2 := c.FormFile("image2")
+
+	if err1 != nil || err2 != nil {
+		response.Error(c, http.StatusBadRequest, "Both image1 and image2 are required", nil)
+		return
+	}
+
+	f1, _ := file1.Open()
+	defer f1.Close()
+	bytes1, _ := io.ReadAll(f1)
+
+	f2, _ := file2.Open()
+	defer f2.Close()
+	bytes2, _ := io.ReadAll(f2)
+
+	// Call the biometric package directly for a fast, memory-only comparison
+	score, isMatch, err := biometric.CompareTwoPrints(bytes1, bytes2)
+	if err != nil {
+		response.InternalError(c, "Failed to analyze fingerprints")
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Comparison complete", gin.H{
+		"is_match": isMatch,
+		"score":    score,
+	})
+}
+
+// GetAuditLogs fetches the system audit logs for the admin dashboard
+func (h *MatchHandler) GetAuditLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
+
+	logs, total, err := h.matchService.GetAllAuditLogs(c.Request.Context(), page, pageSize)
+	if err != nil {
+		response.InternalError(c, "Failed to retrieve audit logs")
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Audit logs retrieved successfully", gin.H{
+		"data":      logs,
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
