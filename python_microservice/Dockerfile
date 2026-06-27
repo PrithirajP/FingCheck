@@ -17,12 +17,12 @@ RUN pip install --no-cache-dir torch torchvision --index-url https://download.py
 # --no-cache-dir prevents pip from saving downloaded packages, reducing image size
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy your FastAPI script and the PyTorch model file into the container
-COPY main.py .
+# Copy your FastAPI script, modules, and the PyTorch model file into the container
+COPY *.py ./
 COPY best_model.pth .
 
-# Expose the port Uvicorn uses
-EXPOSE 8000
+# Expose the port Hugging Face Spaces expects
+EXPOSE 7860
 
 # Start the FastAPI server on 0.0.0.0 so it is accessible outside the container
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
