@@ -50,6 +50,7 @@ python_microservice/myvenv/
 python_microservice/.venv/
 python_microservice/env/
 python_microservice/venv/
+
 # =========================
 # Machine Learning & Data Files
 # =========================
