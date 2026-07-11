@@ -57,7 +57,12 @@ export default function SeparationPage() {
     setCompFile1(null); setCompPreview1(null); setCompFile2(null); setCompPreview2(null); setCompareResult(null);
   };
 
-  const formatImageUrl = (path) => path ? `http://localhost:8080/${path.replace(/\\/g, '/')}` : null;
+  const formatImageUrl = (path) => {
+    if (!path) return null;
+    const apiUrl = import.meta.env.VITE_BACKEND_API_URL || import.meta.env.VITE_API_URL || "http://localhost:8080/api/v1";
+    const baseUrl = apiUrl.replace('/api/v1', '');
+    return `${baseUrl}/${path.replace(/\\/g, '/')}`;
+  };
 
   const handleFileSelect = (e) => {
     const selectedFile = e.target.files[0];
