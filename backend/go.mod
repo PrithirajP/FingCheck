@@ -6,6 +6,7 @@ replace github.com/jtejido/sourceafis => github.com/jtejido/go-sourceafis v0.0.2
 
 require (
 	github.com/clerk/clerk-sdk-go/v2 v2.7.0
+	github.com/cloudinary/cloudinary-go/v2 v2.9.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/joho/godotenv v1.5.1
 	github.com/jtejido/sourceafis v0.0.0-00010101000000-000000000000

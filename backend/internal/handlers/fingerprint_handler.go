@@ -14,17 +14,16 @@ import (
 	"github.com/kirantiwari/fingcheck/pkg/response"
 )
 
-// FingerprintHandler handles HTTP requests for fingerprint management endpoints.
 type FingerprintHandler struct {
-	fpService services.FingerprintService
-	uploadDir string
+	fpService  services.FingerprintService
+	cloudinary services.CloudinaryService
 }
 
-// NewFingerprintHandler creates a new FingerprintHandler with the given service and upload directory.
-func NewFingerprintHandler(fpService services.FingerprintService, uploadDir string) *FingerprintHandler {
+// NewFingerprintHandler creates a new FingerprintHandler with the given service and cloudinary service.
+func NewFingerprintHandler(fpService services.FingerprintService, cloudinary services.CloudinaryService) *FingerprintHandler {
 	return &FingerprintHandler{
-		fpService: fpService,
-		uploadDir: uploadDir,
+		fpService:  fpService,
+		cloudinary: cloudinary,
 	}
 }
 
@@ -57,10 +56,10 @@ func (h *FingerprintHandler) CreateFingerprint(c *gin.Context) {
 
 	// Generate unique filename
 	filename := primitive.NewObjectID().Hex() + "_" + file.Filename
-	savePath := filepath.Join(h.uploadDir, "fingerprints", filename)
 
-	if err := c.SaveUploadedFile(file, savePath); err != nil {
-		response.InternalError(c, "Failed to save uploaded file")
+	secureURL, err := h.cloudinary.UploadBytes(c.Request.Context(), imageBytes, filename, "fingerprints")
+	if err != nil {
+		response.InternalError(c, "Failed to upload file to Cloudinary: "+err.Error())
 		return
 	}
 
@@ -68,7 +67,7 @@ func (h *FingerprintHandler) CreateFingerprint(c *gin.Context) {
 
 	fp := &models.Fingerprint{
 		Label:      label,
-		ImageURL:   filepath.Join(h.uploadDir, "fingerprints", filename),
+		ImageURL:   secureURL,
 		UploadedBy: adminID,
 	}
 
