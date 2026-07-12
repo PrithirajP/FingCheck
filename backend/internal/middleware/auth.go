@@ -61,7 +61,9 @@ func AuthMiddleware(userRepo repository.UserRepository) gin.HandlerFunc {
 				ClerkUserID: clerkUser.ID,
 				IsActive:    true,
 				Role:        models.RoleUser,
-				AvatarURL:   clerkUser.ImageURL,
+			}
+			if clerkUser.ImageURL != nil {
+				newUser.AvatarURL = *clerkUser.ImageURL
 			}
 			if len(clerkUser.EmailAddresses) > 0 {
 				newUser.Email = clerkUser.EmailAddresses[0].EmailAddress
