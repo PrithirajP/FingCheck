@@ -31,13 +31,15 @@ type overlapService struct {
 	overlapRepo repository.OverlapRepository
 	auditRepo   repository.AuditRepository
 	cfg         *config.Config
+	cloudinary  CloudinaryService
 }
 
-func NewOverlapService(overlapRepo repository.OverlapRepository, auditRepo repository.AuditRepository, cfg *config.Config) OverlapService {
+func NewOverlapService(overlapRepo repository.OverlapRepository, auditRepo repository.AuditRepository, cfg *config.Config, cloudinary CloudinaryService) OverlapService {
 	return &overlapService{
 		overlapRepo: overlapRepo,
 		auditRepo:   auditRepo,
 		cfg:         cfg,
+		cloudinary:  cloudinary,
 	}
 }
 
@@ -154,14 +156,15 @@ func (s *overlapService) ProcessOverlap(ctx context.Context, id primitive.Object
 			return err
 		}
 
-		fileName := fmt.Sprintf("%s_separated_%d.png", id.Hex(), i+1)
-		filePath := filepath.Join(s.cfg.UploadDir, "overlaps", fileName)
-		if err := os.WriteFile(filePath, decodedBytes, 0644); err != nil {
-			_ = s.overlapRepo.UpdateStatus(ctx, id, models.StatusFailed, fmt.Sprintf("Failed to write separated image %d: %v", i+1, err))
+		fileName := fmt.Sprintf("%s_separated_%d", id.Hex(), i+1)
+		
+		secureURL, err := s.cloudinary.UploadBytes(ctx, decodedBytes, fileName, "overlaps")
+		if err != nil {
+			_ = s.overlapRepo.UpdateStatus(ctx, id, models.StatusFailed, fmt.Sprintf("Failed to upload separated image %d to Cloudinary: %v", i+1, err))
 			return err
 		}
 
-		separatedPaths[i] = filepath.Join(s.cfg.UploadDir, "overlaps", fileName)
+		separatedPaths[i] = secureURL
 	}
 
 	err = s.overlapRepo.UpdateSeparatedImages(ctx, id, separatedPaths[0], separatedPaths[1])

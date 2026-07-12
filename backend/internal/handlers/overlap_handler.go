@@ -18,14 +18,14 @@ import (
 // OverlapHandler handles HTTP requests for overlap fingerprint management endpoints.
 type OverlapHandler struct {
 	overlapService services.OverlapService
-	uploadDir      string
+	cloudinary     services.CloudinaryService
 }
 
-// NewOverlapHandler creates a new OverlapHandler with the given service and upload directory.
-func NewOverlapHandler(overlapService services.OverlapService, uploadDir string) *OverlapHandler {
+// NewOverlapHandler creates a new OverlapHandler with the given service and cloudinary service.
+func NewOverlapHandler(overlapService services.OverlapService, cloudinary services.CloudinaryService) *OverlapHandler {
 	return &OverlapHandler{
 		overlapService: overlapService,
-		uploadDir:      uploadDir,
+		cloudinary:     cloudinary,
 	}
 }
 
@@ -39,17 +39,24 @@ func (h *OverlapHandler) UploadOverlap(c *gin.Context) {
 
 	// Generate unique filename
 	filename := primitive.NewObjectID().Hex() + "_" + file.Filename
-	savePath := filepath.Join(h.uploadDir, "overlaps", filename)
 
-	if err := c.SaveUploadedFile(file, savePath); err != nil {
-		response.InternalError(c, "Failed to save uploaded file")
+	fileHandle, err := file.Open()
+	if err != nil {
+		response.InternalError(c, "Failed to open uploaded file")
+		return
+	}
+	defer fileHandle.Close()
+
+	secureURL, err := h.cloudinary.UploadFile(c.Request.Context(), fileHandle, filename, "overlaps")
+	if err != nil {
+		response.InternalError(c, "Failed to upload file to Cloudinary: "+err.Error())
 		return
 	}
 
 	userID := c.MustGet("userID").(primitive.ObjectID)
 
 	overlap := &models.OverlapFingerprint{
-		OriginalImageURL: savePath,
+		OriginalImageURL: secureURL,
 		UploadedBy:       userID,
 		ProcessingStatus: models.StatusPending,
 	}

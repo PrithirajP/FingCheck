@@ -57,16 +57,21 @@ func main() {
 	auditRepo := repository.NewAuditRepository(db)
 
 	// 6. Initialize services
+	cloudinarySvc, err := services.NewCloudinaryService(cfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize Cloudinary service: %v", err)
+	}
+
 	userSvc := services.NewUserService(userRepo, auditRepo)
 	fpSvc := services.NewFingerprintService(fpRepo, auditRepo)
-	overlapSvc := services.NewOverlapService(overlapRepo, auditRepo, cfg)
+	overlapSvc := services.NewOverlapService(overlapRepo, auditRepo, cfg, cloudinarySvc)
 	matchSvc := services.NewMatchService(matchRepo, overlapRepo, fpRepo, auditRepo)
 
 	// 7. Initialize handlers
 	authHandler := handlers.NewAuthHandler(userSvc, cfg.ClerkWebhookSecret)
 	userHandler := handlers.NewUserHandler(userSvc)
-	fpHandler := handlers.NewFingerprintHandler(fpSvc, cfg.UploadDir)
-	overlapHandler := handlers.NewOverlapHandler(overlapSvc, cfg.UploadDir)
+	fpHandler := handlers.NewFingerprintHandler(fpSvc, cloudinarySvc)
+	overlapHandler := handlers.NewOverlapHandler(overlapSvc, cloudinarySvc)
 	matchHandler := handlers.NewMatchHandler(matchSvc)
 	
 	// ---> ADDED: Initialize the new AdminHandler <---
