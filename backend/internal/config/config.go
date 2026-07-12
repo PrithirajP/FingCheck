@@ -18,6 +18,7 @@ type Config struct {
 	UploadDir          string
 	MaxUploadSize      int64
 	PythonServiceURL   string
+	CloudinaryURL      string
 }
 
 // Load loads configurations from .env or environment variables.
@@ -42,6 +43,7 @@ func Load() *Config {
 		UploadDir:          getEnv("UPLOAD_DIR", "./uploads"),
 		MaxUploadSize:      maxUploadSize,
 		PythonServiceURL:   getEnv("PYTHON_SERVICE_URL", "http://localhost:8000"),
+		CloudinaryURL:      getEnv("CLOUDINARY_URL", ""),
 	}
 }
 

@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -31,13 +29,15 @@ type overlapService struct {
 	overlapRepo repository.OverlapRepository
 	auditRepo   repository.AuditRepository
 	cfg         *config.Config
+	cloudinary  CloudinaryService
 }
 
-func NewOverlapService(overlapRepo repository.OverlapRepository, auditRepo repository.AuditRepository, cfg *config.Config) OverlapService {
+func NewOverlapService(overlapRepo repository.OverlapRepository, auditRepo repository.AuditRepository, cfg *config.Config, cloudinary CloudinaryService) OverlapService {
 	return &overlapService{
 		overlapRepo: overlapRepo,
 		auditRepo:   auditRepo,
 		cfg:         cfg,
+		cloudinary:  cloudinary,
 	}
 }
 
@@ -89,9 +89,22 @@ func (s *overlapService) ProcessOverlap(ctx context.Context, id primitive.Object
 		return err
 	}
 
-	imgBytes, err := os.ReadFile(overlap.OriginalImageURL)
+	imgResp, err := http.Get(overlap.OriginalImageURL)
 	if err != nil {
-		_ = s.overlapRepo.UpdateStatus(ctx, id, models.StatusFailed, fmt.Sprintf("Failed to read original image file: %v", err))
+		_ = s.overlapRepo.UpdateStatus(ctx, id, models.StatusFailed, fmt.Sprintf("Failed to download original image file: %v", err))
+		return err
+	}
+	defer imgResp.Body.Close()
+
+	if imgResp.StatusCode != http.StatusOK {
+		err = fmt.Errorf("status code %d", imgResp.StatusCode)
+		_ = s.overlapRepo.UpdateStatus(ctx, id, models.StatusFailed, fmt.Sprintf("Failed to download original image file: %v", err))
+		return err
+	}
+
+	imgBytes, err := io.ReadAll(imgResp.Body)
+	if err != nil {
+		_ = s.overlapRepo.UpdateStatus(ctx, id, models.StatusFailed, fmt.Sprintf("Failed to read downloaded image data: %v", err))
 		return err
 	}
 
@@ -154,14 +167,15 @@ func (s *overlapService) ProcessOverlap(ctx context.Context, id primitive.Object
 			return err
 		}
 
-		fileName := fmt.Sprintf("%s_separated_%d.png", id.Hex(), i+1)
-		filePath := filepath.Join(s.cfg.UploadDir, "overlaps", fileName)
-		if err := os.WriteFile(filePath, decodedBytes, 0644); err != nil {
-			_ = s.overlapRepo.UpdateStatus(ctx, id, models.StatusFailed, fmt.Sprintf("Failed to write separated image %d: %v", i+1, err))
+		fileName := fmt.Sprintf("%s_separated_%d", id.Hex(), i+1)
+		
+		secureURL, err := s.cloudinary.UploadBytes(ctx, decodedBytes, fileName, "overlaps")
+		if err != nil {
+			_ = s.overlapRepo.UpdateStatus(ctx, id, models.StatusFailed, fmt.Sprintf("Failed to upload separated image %d to Cloudinary: %v", i+1, err))
 			return err
 		}
 
-		separatedPaths[i] = filepath.Join(s.cfg.UploadDir, "overlaps", fileName)
+		separatedPaths[i] = secureURL
 	}
 
 	err = s.overlapRepo.UpdateSeparatedImages(ctx, id, separatedPaths[0], separatedPaths[1])

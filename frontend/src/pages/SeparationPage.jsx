@@ -59,6 +59,7 @@ export default function SeparationPage() {
 
   const formatImageUrl = (path) => {
     if (!path) return null;
+    if (path.startsWith('http')) return path;
     const apiUrl = import.meta.env.VITE_BACKEND_API_URL || import.meta.env.VITE_API_URL || "http://localhost:8080/api/v1";
     const baseUrl = apiUrl.replace('/api/v1', '');
     return `${baseUrl}/${path.replace(/\\/g, '/')}`;
