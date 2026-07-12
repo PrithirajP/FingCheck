@@ -106,7 +106,11 @@ export default function SeparationPage() {
           alert("Error checking separation status."); setStage('upload');
         }
       }, 2000);
-    } catch (error) { alert("Upload failed."); setStage('upload'); }
+    } catch (error) { 
+      console.error("Upload error:", error);
+      alert("Upload failed: " + (error.response?.data?.message || error.message)); 
+      setStage('upload'); 
+    }
   };
 
   const handleVerifyComponent = async (componentIndex) => {
