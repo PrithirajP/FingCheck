@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -91,9 +89,22 @@ func (s *overlapService) ProcessOverlap(ctx context.Context, id primitive.Object
 		return err
 	}
 
-	imgBytes, err := os.ReadFile(overlap.OriginalImageURL)
+	imgResp, err := http.Get(overlap.OriginalImageURL)
 	if err != nil {
-		_ = s.overlapRepo.UpdateStatus(ctx, id, models.StatusFailed, fmt.Sprintf("Failed to read original image file: %v", err))
+		_ = s.overlapRepo.UpdateStatus(ctx, id, models.StatusFailed, fmt.Sprintf("Failed to download original image file: %v", err))
+		return err
+	}
+	defer imgResp.Body.Close()
+
+	if imgResp.StatusCode != http.StatusOK {
+		err = fmt.Errorf("status code %d", imgResp.StatusCode)
+		_ = s.overlapRepo.UpdateStatus(ctx, id, models.StatusFailed, fmt.Sprintf("Failed to download original image file: %v", err))
+		return err
+	}
+
+	imgBytes, err := io.ReadAll(imgResp.Body)
+	if err != nil {
+		_ = s.overlapRepo.UpdateStatus(ctx, id, models.StatusFailed, fmt.Sprintf("Failed to read downloaded image data: %v", err))
 		return err
 	}
 
