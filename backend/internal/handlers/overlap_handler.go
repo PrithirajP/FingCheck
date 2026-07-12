@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"path/filepath"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
