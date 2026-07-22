@@ -1,5 +1,5 @@
 import { UserButton } from '@clerk/clerk-react';
-import { LayoutDashboard, Sliders, CheckSquare, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, Sliders, CheckSquare, ShieldAlert, Fingerprint } from 'lucide-react';
 
 export default function DashboardLayout({ children, activeTab, setActiveTab }) {
  const navItems = [
@@ -10,7 +10,10 @@ export default function DashboardLayout({ children, activeTab, setActiveTab }) {
       {/* Sidebar */}
       <aside className="w-64 bg-slate-950 border-r border-slate-800 p-4">
         <div className="mb-8 px-2">
-          <span className="text-xl font-black tracking-wider text-indigo-400">FINGCHECK</span>
+          <span className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-indigo-400 to-amber-400 flex items-center gap-2">
+            <Fingerprint className="w-6 h-6 text-cyan-400" />
+            FINGCHECK
+          </span>
         </div>
         <nav className="space-y-1">
           {navItems.map((item) => {
