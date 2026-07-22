@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { UserButton } from "@clerk/clerk-react";
-import { Activity, Users, Database, Layers, ShieldAlert } from "lucide-react";
+import { Activity, Users, Database, Layers, ShieldAlert, SplitSquareHorizontal } from "lucide-react";
 
 export default function AdminLayout({ children, activeTab, setActiveTab }) {
   // The 5 core views defined in the specification
@@ -9,13 +9,12 @@ export default function AdminLayout({ children, activeTab, setActiveTab }) {
     { id: "users", label: "User Management", icon: Users },
     { id: "targets", label: "Target Database", icon: Database },
     { id: "analysis", label: "Overlap Analysis", icon: Layers },
-    { id: "admin", label: "Admin Logs", icon: ShieldAlert },
-    { id: "audit", label: "Audit Logs", icon: ShieldAlert },
+    { id: "audit", label: "Audit & Security Logs", icon: ShieldAlert },
   ];
 
   useEffect(() => {
     const validTabs = navItems.map((n) => n.id);
-    if (!validTabs.includes(activeTab)) {
+    if (!validTabs.includes(activeTab) && activeTab !== "admin") {
       setActiveTab("overview");
     }
   }, [activeTab, setActiveTab]);
@@ -51,6 +50,17 @@ export default function AdminLayout({ children, activeTab, setActiveTab }) {
             );
           })}
         </nav>
+
+        {/* Quick Launch into User Pipeline Workspace */}
+        <div className="pt-4 border-t border-slate-800">
+          <a
+            href="/dashboard"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm text-indigo-400 hover:bg-indigo-500/10 border border-indigo-500/20 transition-all"
+          >
+            <SplitSquareHorizontal className="w-5 h-5" />
+            User Workspace Portal
+          </a>
+        </div>
       </aside>
 
       {/* Main Admin Content Area */}

@@ -34,7 +34,15 @@ export default function DashboardLayout({ children, activeTab, setActiveTab }) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 border-b border-slate-800 bg-slate-950/50 flex items-center justify-end px-8">
+        <header className="h-16 border-b border-slate-800 bg-slate-950/50 flex items-center justify-between px-8">
+          <div className="flex items-center gap-4">
+            <a
+              href="/admin/dashboard"
+              className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 rounded-lg text-xs font-bold transition"
+            >
+              <ShieldAlert className="w-4 h-4" /> Admin Command Center
+            </a>
+          </div>
           <UserButton afterSignOutUrl="/" />
         </header>
         <main className="flex-1 p-8 max-w-7xl w-full mx-auto">

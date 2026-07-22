@@ -17,6 +17,7 @@ import SystemOverview from './pages/Admin/SystemOverview';
 import UserManagement from './pages/Admin/UserManagement';
 import TargetDatabase from './pages/Admin/TargetDatabase';
 import AuditLogs from './pages/Admin/AuditLogs';
+import OverlapAnalysis from './pages/Admin/OverlapAnalysis';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('separation');
@@ -49,13 +50,11 @@ export default function App() {
 
               {activeTab === 'targets' && <TargetDatabase />}
 
-              {/* Placeholder for future Overlap Analysis view */}
-              {activeTab === 'analysis' && (
-                <div><h2 className="text-2xl font-bold text-white mb-4">Overlap Analysis (Admin View)</h2></div>
-              )}
+              {/* Overlap Analysis Admin View */}
+              {activeTab === 'analysis' && <OverlapAnalysis />}
 
-              {/* Cleaned up the duplicate audit entry */}
-              {activeTab === 'audit' && <AuditLogs />}
+              {/* Security Audit Logs */}
+              {(activeTab === 'audit' || activeTab === 'admin') && <AuditLogs />}
 
             </AdminLayout>
           </ProtectedRoute>

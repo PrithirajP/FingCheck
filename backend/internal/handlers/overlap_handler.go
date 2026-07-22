@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"context"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -48,8 +51,19 @@ func (h *OverlapHandler) UploadOverlap(c *gin.Context) {
 
 	secureURL, err := h.cloudinary.UploadFile(c.Request.Context(), fileHandle, filename, "overlaps")
 	if err != nil {
-		response.InternalError(c, "Failed to upload file to Cloudinary: "+err.Error())
-		return
+		// Fallback to local storage if Cloudinary fails
+		uploadDir := "./uploads/overlaps"
+		_ = os.MkdirAll(uploadDir, 0755)
+		filePath := filepath.Join(uploadDir, filename)
+		
+		_ , _ = fileHandle.Seek(0, 0)
+		bytesData, readErr := io.ReadAll(fileHandle)
+		if readErr == nil && os.WriteFile(filePath, bytesData, 0644) == nil {
+			secureURL = "/uploads/overlaps/" + filename
+		} else {
+			response.InternalError(c, "Failed to upload file: "+err.Error())
+			return
+		}
 	}
 
 	userID := c.MustGet("userID").(primitive.ObjectID)

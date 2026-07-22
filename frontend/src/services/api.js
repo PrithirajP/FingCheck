@@ -12,6 +12,12 @@ const api = axios.create({
   },
 });
 
+let globalGetToken = null;
+
+export const setTokenGetter = (fn) => {
+  globalGetToken = fn;
+};
+
 // We will call this from our React components when a user logs in via Clerk
 export const setAuthToken = (token) => {
   if (token) {
@@ -20,6 +26,46 @@ export const setAuthToken = (token) => {
     delete api.defaults.headers.common["Authorization"];
   }
 };
+
+// Request Interceptor: Automatically attach Bearer token before every outgoing API request
+api.interceptors.request.use(
+  async (config) => {
+    if (globalGetToken && !config.headers.Authorization) {
+      try {
+        const token = await globalGetToken();
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+      } catch (err) {
+        console.error("Request interceptor token error:", err);
+      }
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response Interceptor: If 401 happens, try refreshing token once using skipCache: true and retry request!
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (error.response?.status === 401 && !originalRequest._retry && globalGetToken) {
+      originalRequest._retry = true;
+      try {
+        const freshToken = await globalGetToken({ skipCache: true });
+        if (freshToken) {
+          setAuthToken(freshToken);
+          originalRequest.headers["Authorization"] = `Bearer ${freshToken}`;
+          return api(originalRequest);
+        }
+      } catch (retryErr) {
+        console.error("Failed to auto-refresh token on 401:", retryErr);
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 // --- USER & SEPARATION SERVICES ---
 export const overlapService = {
@@ -112,6 +158,16 @@ export const adminService = {
     const response = await api.post("/admin/fingerprints", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
+    return response.data;
+  },
+
+  getAllFingerprints: async (page = 1, pageSize = 20) => {
+    const response = await api.get(`/admin/fingerprints?page=${page}&page_size=${pageSize}`);
+    return response.data;
+  },
+
+  deleteFingerprint: async (id) => {
+    const response = await api.delete(`/admin/fingerprints/${id}`);
     return response.data;
   },
 

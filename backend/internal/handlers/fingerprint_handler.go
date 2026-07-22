@@ -3,6 +3,8 @@ package handlers
 import (
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -58,8 +60,16 @@ func (h *FingerprintHandler) CreateFingerprint(c *gin.Context) {
 
 	secureURL, err := h.cloudinary.UploadBytes(c.Request.Context(), imageBytes, filename, "fingerprints")
 	if err != nil {
-		response.InternalError(c, "Failed to upload file to Cloudinary: "+err.Error())
-		return
+		// Fallback to local storage if Cloudinary upload fails
+		uploadDir := "./uploads/fingerprints"
+		_ = os.MkdirAll(uploadDir, 0755)
+		filePath := filepath.Join(uploadDir, filename)
+		if writeErr := os.WriteFile(filePath, imageBytes, 0644); writeErr == nil {
+			secureURL = "/uploads/fingerprints/" + filename
+		} else {
+			response.InternalError(c, "Failed to upload file: "+err.Error())
+			return
+		}
 	}
 
 	adminID := c.MustGet("userID").(primitive.ObjectID)

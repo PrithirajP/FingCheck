@@ -19,6 +19,9 @@ type Config struct {
 	MaxUploadSize      int64
 	PythonServiceURL   string
 	CloudinaryURL      string
+	CloudinaryCloudName string
+	CloudinaryAPIKey    string
+	CloudinaryAPISecret string
 }
 
 // Load loads configurations from .env or environment variables.
@@ -35,15 +38,18 @@ func Load() *Config {
 	}
 
 	return &Config{
-		ServerPort:         getEnv("PORT", "8080"), // Default to 8080 to avoid conflict with Python service on 8000
-		MongoURL:           getEnv("MONGO_URL", "mongodb://localhost:27017"),
-		DBName:             getEnv("DB_NAME", "fingcheck"),
-		ClerkSecretKey:     getEnv("CLERK_SECRET_KEY", ""),
-		ClerkWebhookSecret: getEnv("CLERK_WEBHOOK_SECRET", ""),
-		UploadDir:          getEnv("UPLOAD_DIR", "./uploads"),
-		MaxUploadSize:      maxUploadSize,
-		PythonServiceURL:   getEnv("PYTHON_SERVICE_URL", "http://localhost:8000"),
-		CloudinaryURL:      getEnv("CLOUDINARY_URL", ""),
+		ServerPort:          getEnv("PORT", "8080"), // Default to 8080 to avoid conflict with Python service on 8000
+		MongoURL:            getEnv("MONGO_URL", "mongodb://localhost:27017"),
+		DBName:              getEnv("DB_NAME", "fingcheck"),
+		ClerkSecretKey:      getEnv("CLERK_SECRET_KEY", ""),
+		ClerkWebhookSecret:  getEnv("CLERK_WEBHOOK_SECRET", ""),
+		UploadDir:           getEnv("UPLOAD_DIR", "./uploads"),
+		MaxUploadSize:       maxUploadSize,
+		PythonServiceURL:    getEnv("PYTHON_SERVICE_URL", "http://localhost:8000"),
+		CloudinaryURL:       getEnv("CLOUDINARY_URL", ""),
+		CloudinaryCloudName: getEnv("CLOUDINARY_CLOUD_NAME", ""),
+		CloudinaryAPIKey:    getEnv("CLOUDINARY_API_KEY", ""),
+		CloudinaryAPISecret: getEnv("CLOUDINARY_API_SECRET", getEnv("CLOUDINARY_SECRET_KEY", "")),
 	}
 }
 

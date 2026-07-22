@@ -11,7 +11,7 @@ import (
 
 	"github.com/jtejido/sourceafis"
 	"github.com/jtejido/sourceafis/config"
-	"github.com/jtejido/sourceafis/extractor/logger"
+	"github.com/jtejido/sourceafis/features"
 	"github.com/kirantiwari/fingcheck/internal/models"
 	"github.com/kirantiwari/fingcheck/internal/repository"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -21,14 +21,12 @@ import (
 func init() {
 	config.LoadDefaultConfig()
 }
+
 // A dummy logger that safely absorbs and discards SourceAFIS debug logs
-// This prevents the nil pointer panic when the algorithm tries to log its steps.
-type noopLogger struct{
-	logger.TransparencyLogger
-}
+type noopLogger struct{}
 
 func (n *noopLogger) Log(key string, data interface{}) error { return nil }
-func (n *noopLogger) Accepts(key string) bool { return false }
+func (n *noopLogger) LogSkeleton(keyword string, skeleton *features.Skeleton) error { return nil }
 
 type FingerprintService interface {
 	CreateFingerprint(ctx context.Context, fp *models.Fingerprint, imageBytes []byte, adminID primitive.ObjectID) (*models.Fingerprint, error)

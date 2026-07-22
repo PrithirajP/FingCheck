@@ -15,8 +15,13 @@ export default function SystemOverview() {
         setAuthToken(token);
         const res = await adminService.getSystemStats();
         
-        // Safely extract the stats from the backend response
-        setStats(res?.data || { users: 0, targets: 0, overlaps: 0 });
+        // Safely extract the stats from response structure
+        const statsData = res?.data || res;
+        setStats({
+          users: statsData?.users ?? 0,
+          targets: statsData?.targets ?? 0,
+          overlaps: statsData?.overlaps ?? 0,
+        });
       } catch (error) {
         console.error("Failed to load system stats", error);
       } finally {

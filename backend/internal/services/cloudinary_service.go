@@ -23,12 +23,17 @@ type cloudinaryService struct {
 }
 
 func NewCloudinaryService(cfg *config.Config) (CloudinaryService, error) {
-	// Initialize Cloudinary with the URL from environment variables
-	if cfg.CloudinaryURL == "" {
-		return nil, fmt.Errorf("CLOUDINARY_URL environment variable is missing")
+	var cld *cloudinary.Cloudinary
+	var err error
+
+	if cfg.CloudinaryCloudName != "" && cfg.CloudinaryAPIKey != "" && cfg.CloudinaryAPISecret != "" {
+		cld, err = cloudinary.NewFromParams(cfg.CloudinaryCloudName, cfg.CloudinaryAPIKey, cfg.CloudinaryAPISecret)
+	} else if cfg.CloudinaryURL != "" {
+		cld, err = cloudinary.NewFromURL(cfg.CloudinaryURL)
+	} else {
+		return nil, fmt.Errorf("Cloudinary credentials (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET) or CLOUDINARY_URL are missing")
 	}
-	
-	cld, err := cloudinary.NewFromURL(cfg.CloudinaryURL)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Cloudinary: %w", err)
 	}
@@ -44,8 +49,8 @@ func (s *cloudinaryService) UploadFile(ctx context.Context, file multipart.File,
 	publicID = strings.TrimSuffix(publicID, ".jpg")
 	publicID = strings.TrimSuffix(publicID, ".jpeg")
 	
-	// Ensure the context has a timeout to prevent hanging
-	uploadCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	// Fast 4-second timeout to allow instant local fallback if Cloudinary is slow/offline
+	uploadCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
 
 	resp, err := s.cld.Upload.Upload(uploadCtx, file, uploader.UploadParams{
@@ -66,7 +71,8 @@ func (s *cloudinaryService) UploadBytes(ctx context.Context, data []byte, filena
 	publicID = strings.TrimSuffix(publicID, ".jpg")
 	publicID = strings.TrimSuffix(publicID, ".jpeg")
 
-	uploadCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	// Fast 4-second timeout to allow instant local fallback if Cloudinary is slow/offline
+	uploadCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
 
 	reader := bytes.NewReader(data)

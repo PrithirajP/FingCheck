@@ -2,10 +2,11 @@ package handlers
 
 import (
 	"context"
-	"log" // <--- Added log package
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/kirantiwari/fingcheck/pkg/response"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -42,7 +43,7 @@ func (h *AdminHandler) GetSystemStats(c *gin.Context) {
 		overlapCount = 0
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, http.StatusOK, "System stats retrieved successfully", gin.H{
 		"users":    userCount,
 		"targets":  targetCount,
 		"overlaps": overlapCount,
