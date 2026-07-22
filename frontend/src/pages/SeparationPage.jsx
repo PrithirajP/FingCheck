@@ -1,12 +1,27 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
-import { Upload, Layers, Fingerprint, Search, Loader2, Database, ArrowLeft, SplitSquareHorizontal, Scale, Scan, Crosshair, AlertCircle, Cpu, Zap } from 'lucide-react';
-import { overlapService, matchService, setAuthToken } from '../services/api';
+import { Upload, Layers, Fingerprint, Search, Loader2, Database, ArrowLeft, SplitSquareHorizontal, Scale, Scan, Crosshair, AlertCircle, Cpu, Zap, CheckCircle, ShieldAlert } from 'lucide-react';
+import api, { overlapService, matchService, setAuthToken } from '../services/api';
 
 export default function SeparationPage() {
   const { getToken } = useAuth();
   const [mode, setMode] = useState('menu'); 
   const [overlaps, setOverlaps] = useState([]);
+  const [userRole, setUserRole] = useState('user');
+
+  useEffect(() => {
+    async function fetchUserRole() {
+      try {
+        const token = await getToken();
+        setAuthToken(token);
+        const res = await api.get('/me');
+        if (res.data?.data?.role) {
+          setUserRole(res.data.data.role);
+        }
+      } catch (err) {}
+    }
+    fetchUserRole();
+  }, [getToken]);
   
   // Stages: 'upload' -> 'scanning' -> 'detected' -> 'processing' -> 'completed'
   const [stage, setStage] = useState('upload');
@@ -135,8 +150,13 @@ export default function SeparationPage() {
         fileToUpload = new File([blob], "target_print.png", { type: blob.type });
       }
       const matchRes = await matchService.runDirectMatch(fileToUpload);
-      const successfulMatch = matchRes.data.results.find(m => m.is_match || m.status === "found");
-      setDirectMatchResult({ matched: !!successfulMatch });
+      const results = matchRes?.data?.results || matchRes?.results || [];
+      const successfulMatch = results.find(m => m.is_match || m.status === "found");
+      setDirectMatchResult({
+        matched: !!successfulMatch,
+        matchedTarget: successfulMatch?.matched_fingerprint || null,
+        score: successfulMatch?.confidence_score || 0
+      });
     } catch (err) { alert("Direct Match failed."); } finally { setIsDirectMatching(false); }
   };
 
@@ -395,8 +415,100 @@ export default function SeparationPage() {
           {isDirectMatching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Fingerprint className="w-5 h-5" />} Initiate System Query
         </button>
         {directMatchResult && (
-          <div className={`p-8 rounded-2xl border text-center animate-in zoom-in-95 ${directMatchResult.matched ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-rose-500/10 border-rose-500/40 text-rose-400'}`}>
-            <h4 className="text-2xl font-bold">{directMatchResult.matched ? 'VERIFICATION SECURED' : 'ACCESS DENIED: NO MATCH'}</h4>
+          <div className="space-y-6 animate-in zoom-in-95">
+            {directMatchResult.matched ? (
+              <div className="bg-emerald-500/10 border border-emerald-500/40 rounded-2xl p-6 text-emerald-400 space-y-4">
+                <div className="flex items-center justify-between border-b border-emerald-500/20 pb-3">
+                  <h4 className="text-xl font-bold flex items-center gap-2">
+                    <CheckCircle className="w-6 h-6 text-emerald-400" />
+                    VERIFICATION SECURED — MATCH CONFIRMED
+                  </h4>
+                  <span className="bg-emerald-500/20 text-emerald-300 text-xs font-mono px-3 py-1 rounded-full border border-emerald-500/30">
+                    SCORE: {directMatchResult.score ? directMatchResult.score.toFixed(2) : '100%'}
+                  </span>
+                </div>
+
+                {/* If user is ADMIN, display full confidential target identity dossier! */}
+                {userRole === 'admin' && directMatchResult.matchedTarget ? (
+                  <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-5 text-left text-slate-200 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <span className="text-xs font-mono font-bold tracking-widest text-amber-500 uppercase flex items-center gap-1.5">
+                        <ShieldAlert className="w-4 h-4" /> CONFIDENTIAL TARGET DOSSIER (ADMIN ACCESS ONLY)
+                      </span>
+                      <span className="text-xs font-mono text-slate-500">
+                        TARGET ID: {directMatchResult.matchedTarget.id || directMatchResult.matchedTarget._id}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {/* Target Image */}
+                      <div className="h-44 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex items-center justify-center p-2">
+                        {directMatchResult.matchedTarget.image_url ? (
+                          <img 
+                            src={formatImageUrl(directMatchResult.matchedTarget.image_url)} 
+                            alt={directMatchResult.matchedTarget.full_name} 
+                            className="max-h-full object-contain filter contrast-125" 
+                          />
+                        ) : (
+                          <Fingerprint className="w-12 h-12 text-slate-600" />
+                        )}
+                      </div>
+
+                      {/* Target Details Column 1 */}
+                      <div className="space-y-2 text-sm">
+                        <div>
+                          <span className="text-xs text-slate-500 font-mono block">FULL NAME</span>
+                          <span className="text-base font-bold text-white">{directMatchResult.matchedTarget.full_name || "N/A"}</span>
+                        </div>
+                        <div>
+                          <span className="text-xs text-slate-500 font-mono block">AGE / GENDER</span>
+                          <span className="font-medium text-slate-300">
+                            {directMatchResult.matchedTarget.age ? `${directMatchResult.matchedTarget.age} Years` : "N/A"} • {directMatchResult.matchedTarget.gender || "N/A"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-xs text-slate-500 font-mono block">FINGER POSITION</span>
+                          <span className="font-semibold text-indigo-400">{directMatchResult.matchedTarget.label || "N/A"}</span>
+                        </div>
+                      </div>
+
+                      {/* Target Details Column 2 */}
+                      <div className="space-y-2 text-sm">
+                        <div>
+                          <span className="text-xs text-slate-500 font-mono block">ID PROOF TYPE</span>
+                          <span className="font-medium text-slate-200">{directMatchResult.matchedTarget.proof_type || "N/A"}</span>
+                        </div>
+                        <div>
+                          <span className="text-xs text-slate-500 font-mono block">PROOF ID NUMBER</span>
+                          <span className="font-mono font-bold text-amber-400">{directMatchResult.matchedTarget.proof_id || "N/A"}</span>
+                        </div>
+                        {directMatchResult.matchedTarget.contact && (
+                          <div>
+                            <span className="text-xs text-slate-500 font-mono block">CONTACT</span>
+                            <span className="font-medium text-slate-300">{directMatchResult.matchedTarget.contact}</span>
+                          </div>
+                        )}
+                        {directMatchResult.matchedTarget.address && (
+                          <div>
+                            <span className="text-xs text-slate-500 font-mono block">ADDRESS</span>
+                            <span className="text-xs text-slate-400">{directMatchResult.matchedTarget.address}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-300 text-left">
+                    A positive minutiae match was confirmed against the central target registry.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="bg-rose-500/10 border border-rose-500/40 text-rose-400 p-8 rounded-2xl text-center">
+                <h4 className="text-2xl font-bold">ACCESS DENIED: NO MATCH</h4>
+                <p className="text-xs text-slate-400 mt-2 font-mono">No matching minutiae patterns found in target database.</p>
+              </div>
+            )}
           </div>
         )}
       </div>

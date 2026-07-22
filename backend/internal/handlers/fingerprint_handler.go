@@ -37,9 +37,25 @@ func (h *FingerprintHandler) CreateFingerprint(c *gin.Context) {
 	}
 
 	label := c.PostForm("label")
-	if label == "" {
-		response.Error(c, http.StatusBadRequest, "Label is required", nil)
+	fullName := c.PostForm("full_name")
+	ageStr := c.PostForm("age")
+	gender := c.PostForm("gender")
+	proofType := c.PostForm("proof_type")
+	proofID := c.PostForm("proof_id")
+	contact := c.PostForm("contact")
+	address := c.PostForm("address")
+
+	if label == "" || fullName == "" || proofType == "" || proofID == "" {
+		response.Error(c, http.StatusBadRequest, "Label, Full Name, Proof Type, and Proof ID are required", nil)
 		return
+	}
+
+	age, _ := strconv.Atoi(ageStr)
+	if age <= 0 {
+		age = 25
+	}
+	if gender == "" {
+		gender = "Not Specified"
 	}
 
 	fileHandle, err := file.Open()
@@ -76,6 +92,13 @@ func (h *FingerprintHandler) CreateFingerprint(c *gin.Context) {
 
 	fp := &models.Fingerprint{
 		Label:      label,
+		FullName:   fullName,
+		Age:        age,
+		Gender:     gender,
+		ProofType:  proofType,
+		ProofID:    proofID,
+		Contact:    contact,
+		Address:    address,
 		ImageURL:   secureURL,
 		UploadedBy: adminID,
 	}

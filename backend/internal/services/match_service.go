@@ -101,6 +101,7 @@ func (s *matchService) MatchFingerprint(ctx context.Context, overlapID primitive
 		isMatch := false
 		score := 0.0
 
+		var matchedFP *models.Fingerprint
 		if len(dbRecords) > 0 {
 			matchRes, err := biometric.ProcessBiometricMatch(ctx, imgBytes, dbRecords)
 			if err != nil {
@@ -112,6 +113,9 @@ func (s *matchService) MatchFingerprint(ctx context.Context, overlapID primitive
 					parsedID, err := primitive.ObjectIDFromHex(matchRes.UserID)
 					if err == nil {
 						matchedFPID = &parsedID
+						if target, err := s.fpRepo.GetByID(ctx, parsedID); err == nil {
+							matchedFP = target
+						}
 					}
 				}
 			}
@@ -121,6 +125,7 @@ func (s *matchService) MatchFingerprint(ctx context.Context, overlapID primitive
 			ID:                   primitive.NewObjectID(),
 			OverlapFingerprintID: overlapID,
 			MatchedFingerprintID: matchedFPID,
+			MatchedFingerprint:   matchedFP,
 			SearchedBy:           searcherID,
 			ComponentIndex:       comp.Index,
 			ConfidenceScore:      score,
@@ -203,6 +208,9 @@ func (s *matchService) DirectMatch(ctx context.Context, imageBytes []byte, searc
 		matchResult.MatchedFingerprintID = &matchedFPID
 		matchResult.ConfidenceScore = res.Score
 		matchResult.IsMatch = true
+		if matchedFP, err := s.fpRepo.GetByID(ctx, matchedFPID); err == nil {
+			matchResult.MatchedFingerprint = matchedFP
+		}
 	}
 
 	_ = s.matchRepo.Create(ctx, &matchResult)
