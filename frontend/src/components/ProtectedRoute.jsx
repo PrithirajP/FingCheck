@@ -1,9 +1,40 @@
-import { useUser, RedirectToSignIn } from '@clerk/clerk-react';
+import { useUser, useAuth, RedirectToSignIn } from '@clerk/clerk-react';
+import { useState, useEffect } from 'react';
+import api, { setAuthToken } from '../services/api';
 
 export default function ProtectedRoute({ children, allowedRole }) {
   const { isLoaded, isSignedIn, user } = useUser();
+  const { getToken } = useAuth();
+  const [dbRole, setDbRole] = useState(null);
+  const [loadingRole, setLoadingRole] = useState(true);
 
-  if (!isLoaded) {
+  useEffect(() => {
+    let isMounted = true;
+    async function checkRole() {
+      if (isSignedIn) {
+        try {
+          const token = await getToken();
+          setAuthToken(token);
+          const res = await api.get('/me');
+          if (isMounted && res.data?.data?.role) {
+            setDbRole(res.data.data.role);
+          }
+        } catch (err) {
+          console.error("Failed to fetch user profile from backend:", err);
+        } finally {
+          if (isMounted) setLoadingRole(false);
+        }
+      } else {
+        if (isMounted) setLoadingRole(false);
+      }
+    }
+
+    if (isLoaded) {
+      checkRole();
+    }
+  }, [isLoaded, isSignedIn, getToken]);
+
+  if (!isLoaded || (isSignedIn && loadingRole)) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
         Verifying authorization tokens...
@@ -15,8 +46,8 @@ export default function ProtectedRoute({ children, allowedRole }) {
     return <RedirectToSignIn />;
   }
 
-  // Reads metadata from Clerk. If no role is present, defaults to 'user'
-  const userRole = user.publicMetadata?.role || 'user';
+  // Priority: 1) MongoDB backend role, 2) Clerk publicMetadata role, 3) fallback 'user'
+  const userRole = dbRole || user.publicMetadata?.role || 'user';
 
   if (allowedRole && userRole !== allowedRole) {
     return (

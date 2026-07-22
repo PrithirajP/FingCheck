@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { UserButton } from "@clerk/clerk-react";
 import { Activity, Users, Database, Layers, ShieldAlert } from "lucide-react";
 
@@ -11,6 +12,13 @@ export default function AdminLayout({ children, activeTab, setActiveTab }) {
     { id: "admin", label: "Admin Logs", icon: ShieldAlert },
     { id: "audit", label: "Audit Logs", icon: ShieldAlert },
   ];
+
+  useEffect(() => {
+    const validTabs = navItems.map((n) => n.id);
+    if (!validTabs.includes(activeTab)) {
+      setActiveTab("overview");
+    }
+  }, [activeTab, setActiveTab]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex">
