@@ -149,11 +149,14 @@ export const adminService = {
     return response.data;
   },
 
-  uploadTargetPrint: async (file, label, deviceMeta = "") => {
-    const formData = new FormData();
-    formData.append("image", file);
-    formData.append("label", label);
-    if (deviceMeta) formData.append("metadata", deviceMeta);
+  uploadTargetPrint: async (formDataOrFile, label, deviceMeta = "") => {
+    let formData = formDataOrFile;
+    if (!(formDataOrFile instanceof FormData)) {
+      formData = new FormData();
+      formData.append("image", formDataOrFile);
+      formData.append("label", label);
+      if (deviceMeta) formData.append("metadata", deviceMeta);
+    }
 
     const response = await api.post("/admin/fingerprints", formData, {
       headers: { "Content-Type": "multipart/form-data" },
