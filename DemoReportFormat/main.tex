@@ -1,0 +1,60 @@
+
+\documentclass[12pt,a4paper]{report}
+\usepackage[pdftex]{graphicx}
+\usepackage{url}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{xltabular}
+\usepackage{longtable}
+\usepackage{ragged2e}
+\usepackage{hyperref} 
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{xspace}
+\usepackage{fontspec}
+
+
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+
+\begin{document}
+\input{title}
+\input{declaration}
+\input{acknowledgement}
+\input{abstract}
+\pagenumbering{roman}
+\listoftables
+\tableofcontents
+\newpage
+\pagenumbering{arabic} 
+\input{objective} 
+\input{introduction}
+\input{work-done}
+\input{experiments-en-as}
+\input{future-work}
+\input{conclusion}
+\renewcommand\bibname{References} 
+\bibliographystyle{abbrv}
+\bibliography{bibilo}
+\end{document}
